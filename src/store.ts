@@ -40,6 +40,9 @@ export interface LogEntry {
   ip: string;
   localHost: string;
 }
+
+export type ForwardingType = 'local' | 'remote' | 'dynamic';
+
 export interface PortForwardingRule {
   id: string;
   type: ForwardingType;
@@ -50,6 +53,7 @@ export interface PortForwardingRule {
   bindAddress?: string;
   createdAt: number;
 }
+
 export interface Key {
   id: string;
   label: string;
@@ -60,14 +64,22 @@ export interface Key {
   certificate?: string;
   createdAt: number;
 }
+
 export interface Snippet {
   id: string;
   label: string;
   script: string;
   actionDescription?: string;
   package?: string;
-  targets: string[]; // host IDs
+  targets: string[];
   createdAt: number;
+}
+
+export interface ShellHistoryEntry {
+  id: string;
+  command: string;
+  hostId?: string;
+  executedAt: number;
 }
 
 export interface Tab {
@@ -79,12 +91,6 @@ export interface Tab {
   connectionLog?: string[];
 }
 
-export interface ShellHistoryEntry {
-  id: string;
-  command: string;
-  hostId?: string;
-  executedAt: number;
-}
 export type KeyPanelMode = 'new' | 'touch-id' | 'fido2' | 'certificate';
 export type Page = 'hosts' | 'keychain' | 'port-forwarding' | 'snippets' | 'known-hosts' | 'logs';
 export type TopTab = 'vaults' | 'sftp' | 'serial';
@@ -97,16 +103,14 @@ interface AppState {
   groups: Group[];
   knownHosts: KnownHost[];
   logs: LogEntry[];
-  keys: Key[]; // <-- Тип добавлен сюда
-  newTabOpen: boolean;
+  keys: Key[];
+  forwardingRules: PortForwardingRule[];
+  snippets: Snippet[];
+  shellHistory: ShellHistoryEntry[];
+  tabs: Tab[];
 
-  tabs: [
-    { id: 'tab-vaults', type: 'vaults', label: 'Vaults' },
-    { id: 'tab-sftp', type: 'sftp', label: 'SFTP' },
-    ],
-    activeTabId: 'tab-vaults',
-  
   // UI Состояния
+  newTabOpen: boolean;
   activePage: Page;
   activeTopTab: TopTab;
   selectedHostId: string | null;
@@ -117,26 +121,32 @@ interface AppState {
   contextMenu: { x: number; y: number; hostId: string } | null;
   panelMenuOpen: boolean;
   pendingDeleteHostId: string | null;
-  
   knownHostsSort: SortOrder;
   knownHostsView: ViewMode;
   showInviteBanner: boolean;
-  
   selectedTags: string[];
   tagFilterOpen: boolean;
   newHostMenuOpen: boolean;
-
-  // Keychain UI Состояния
   selectedKeyId: string | null;
   keyPanelOpen: boolean;
   keyPanelMode: KeyPanelMode;
   keyMenuOpen: boolean;
+  selectedRuleId: string | null;
+  forwardingPanelOpen: boolean;
+  forwardingType: ForwardingType;
+  forwardingMenuOpen: boolean;
+  selectedSnippetId: string | null;
+  snippetPanelOpen: boolean;
+  snippetMenuOpen: boolean;
+  showShellHistory: boolean;
+  activeTabId: string;
 
   // Actions (Hosts & General)
   setActivePage: (page: Page) => void;
   setActiveTopTab: (tab: TopTab) => void;
   setSelectedHost: (id: string | null) => void;
   setSelectedGroup: (id: string | null) => void;
+  setNewTabOpen: (open: boolean) => void;
   openNewHostPanel: () => void;
   openHostDetails: (id: string) => void;
   closePanel: () => void;
@@ -168,38 +178,30 @@ interface AppState {
   removeKey: (id: string) => void;
   setKeyMenuOpen: (open: boolean) => void;
 
+  // Actions (Forwarding)
   setSelectedRule: (id: string | null) => void;
   setForwardingPanelOpen: (open: boolean) => void;
   setForwardingType: (type: ForwardingType) => void;
   addForwardingRule: (rule: PortForwardingRule) => void;
   removeForwardingRule: (id: string) => void;
   setForwardingMenuOpen: (open: boolean) => void;
-  forwardingRules: PortForwardingRule[];
-  selectedRuleId: string | null;
-  forwardingPanelOpen: boolean;
-  forwardingType: ForwardingType;
-  forwardingMenuOpen: boolean;
 
-    snippets: Snippet[];
-    shellHistory: ShellHistoryEntry[];
-    selectedSnippetId: string | null;
-    snippetPanelOpen: boolean;
-    snippetMenuOpen: boolean;
-    showShellHistory: boolean;
-    newTabOpen: false,
-    setSelectedSnippet: (id: string | null) => void;
-    setSnippetPanelOpen: (open: boolean) => void;
-    addSnippet: (snippet: Snippet) => void;
-    updateSnippet: (id: string, updates: Partial<Snippet>) => void;
-    removeSnippet: (id: string) => void;
-    setSnippetMenuOpen: (open: boolean) => void;
-    setShowShellHistory: (show: boolean) => void;
-    setNewTabOpen: (open: boolean) => void;
-    tabs: Tab[];
-    activeTabId: string;
+  // Actions (Snippets)
+  setSelectedSnippet: (id: string | null) => void;
+  setSnippetPanelOpen: (open: boolean) => void;
+  addSnippet: (snippet: Snippet) => void;
+  updateSnippet: (id: string, updates: Partial<Snippet>) => void;
+  removeSnippet: (id: string) => void;
+  setSnippetMenuOpen: (open: boolean) => void;
+  setShowShellHistory: (show: boolean) => void;
+
+  // Actions (Tabs)
+  addConnectionTab: (hostId: string) => void;
+  setActiveTab: (tabId: string) => void;
+  closeTab: (tabId: string) => void;
+  updateConnectionStatus: (tabId: string, status: 'connecting' | 'connected' | 'failed') => void;
+  addConnectionLog: (tabId: string, log: string) => void;
 }
-
-
 
 const initialHosts: Host[] = [
   { id: 'h1', address: '192.168.1.200', label: 'k8s-master', port: 22, username: 'k8suser', password: 'secret123', tags: ['ssh', 'k8suser', 'VM', 'k8s'], groupId: 'g1', os: 'ubuntu', createdAt: Date.now() - 100000 },
@@ -224,25 +226,30 @@ const initialLogs: LogEntry[] = [
   { id: 'l3', date: 'Sep 22, 2026', time: '11:25 - 14:19 (+1d)', user: 'mgddgzp97n@privaterelay.applei...', userInitial: 'M', hostId: 'h3', hostLabel: 'k8s-worker1', hostTags: ['ssh', 'k8suser', 'VM', 'k8s'], hostOs: 'generic', saved: false, ip: '91.122.200.80', localHost: 'MacBook-Air-Misha.local' },
   { id: 'l4', date: 'Sep 22, 2026', time: '11:23 - 11:23', user: 'mgddgzp97n@privaterelay.applei...', userInitial: 'M', hostId: 'h4', hostLabel: 'kuber-host-server', hostTags: ['ssh', 'benx'], hostOs: 'ubuntu', saved: false, ip: '91.122.200.80', localHost: 'MacBook-Air-Misha.local' },
 ];
-export type ForwardingType = 'local' | 'remote' | 'dynamic';
 
-
+const initialShellHistory: ShellHistoryEntry[] = [
+  { id: 'sh1', command: 'clear', executedAt: Date.now() - 100000 },
+  { id: 'sh2', command: 'ip a', executedAt: Date.now() - 90000 },
+  { id: 'sh3', command: 'sudo apt-get update && sudo apt-get upgrade -y', executedAt: Date.now() - 80000 },
+  { id: 'sh4', command: 'sudo apt-get install -y kubelet kubeadm kubectl', executedAt: Date.now() - 70000 },
+];
 
 export const useStore = create<AppState>((set, get) => ({
-  // Начальные данные
+  // 1. Начальные данные (State)
   hosts: initialHosts,
   groups: initialGroups,
   knownHosts: initialKnownHosts,
   logs: initialLogs,
-  keys: [], // <-- ИСПРАВЛЕНО: перенесено сюда из interface
-
+  keys: [],
   forwardingRules: [],
-  selectedRuleId: null,
-  forwardingPanelOpen: false,
-  forwardingType: 'local',
-  forwardingMenuOpen: false,
-  
-  // Начальные UI состояния
+  snippets: [],
+  shellHistory: initialShellHistory,
+  tabs: [
+    { id: 'tab-vaults', type: 'vaults', label: 'Vaults' },
+    { id: 'tab-sftp', type: 'sftp', label: 'SFTP' },
+  ],
+
+  newTabOpen: false,
   activePage: 'hosts',
   activeTopTab: 'vaults',
   selectedHostId: null,
@@ -259,16 +266,21 @@ export const useStore = create<AppState>((set, get) => ({
   selectedTags: [],
   tagFilterOpen: false,
   newHostMenuOpen: false,
-  
-  // Начальные Keychain состояния
-  selectedKeyId: null, // <-- ИСПРАВЛЕНО
-  keyPanelOpen: false, // <-- ИСПРАВЛЕНО
-  keyPanelMode: 'new', // <-- ИСПРАВЛЕНО
-  keyMenuOpen: false,  // <-- ИСПРАВЛЕНО
+  selectedKeyId: null,
+  keyPanelOpen: false,
+  keyPanelMode: 'new',
+  keyMenuOpen: false,
+  selectedRuleId: null,
+  forwardingPanelOpen: false,
+  forwardingType: 'local',
+  forwardingMenuOpen: false,
+  selectedSnippetId: null,
+  snippetPanelOpen: false,
+  snippetMenuOpen: false,
+  showShellHistory: false,
+  activeTabId: 'tab-vaults',
 
-  
-
-  // Реализация Actions (Hosts & General)
+  // 2. Реализация Actions
   setActivePage: (page) => set({ activePage: page, isPanelOpen: false, selectedHostId: null, selectedGroupId: null, contextMenu: null }),
   setActiveTopTab: (tab) => set({ activeTopTab: tab }),
   setSelectedHost: (id) => set({ selectedHostId: id }),
@@ -280,14 +292,11 @@ export const useStore = create<AppState>((set, get) => ({
   closePanel: () => set({ isPanelOpen: false, selectedHostId: null, panelMenuOpen: false }),
   
   addHost: (host) => set((state) => ({ hosts: [...state.hosts, host] })),
-  updateHost: (id, updates) => set((state) => ({
-    hosts: state.hosts.map(h => h.id === id ? { ...h, ...updates } : h)
-  })),
+  updateHost: (id, updates) => set((state) => ({ hosts: state.hosts.map(h => h.id === id ? { ...h, ...updates } : h) })),
   duplicateHost: (id) => set((state) => {
     const host = state.hosts.find(h => h.id === id);
     if (!host) return state;
-    const newHost: Host = { ...host, id: `h${Date.now()}`, label: `${host.label} copy`, createdAt: Date.now() };
-    return { hosts: [...state.hosts, newHost] };
+    return { hosts: [...state.hosts, { ...host, id: `h${Date.now()}`, label: `${host.label} copy`, createdAt: Date.now() }] };
   }),
   removeHost: (id) => set((state) => ({
     hosts: state.hosts.filter(h => h.id !== id),
@@ -295,8 +304,6 @@ export const useStore = create<AppState>((set, get) => ({
     isPanelOpen: state.selectedHostId === id ? false : state.isPanelOpen,
   })),
   
-  
-
   setSearchQuery: (query) => set({ searchQuery: query }),
   openContextMenu: (x, y, hostId) => set({ contextMenu: { x, y, hostId } }),
   closeContextMenu: () => set({ contextMenu: null }),
@@ -309,44 +316,43 @@ export const useStore = create<AppState>((set, get) => ({
   setShowInviteBanner: (show) => set({ showInviteBanner: show }),
   
   toggleTag: (tag) => set((state) => {
-    const newTags = state.selectedTags.includes(tag)
-      ? state.selectedTags.filter(t => t !== tag)
-      : [...state.selectedTags, tag];
+    const newTags = state.selectedTags.includes(tag) ? state.selectedTags.filter(t => t !== tag) : [...state.selectedTags, tag];
     return { selectedTags: newTags };
   }),
   clearTags: () => set({ selectedTags: [] }),
   setTagFilterOpen: (open) => set({ tagFilterOpen: open }),
   setNewHostMenuOpen: (open) => set({ newHostMenuOpen: open }),
 
-  // Реализация Actions (Keys)
+  // Keys Actions
   setSelectedKey: (id) => set({ selectedKeyId: id }),
   setKeyPanelOpen: (open) => set({ keyPanelOpen: open }),
   setKeyPanelMode: (mode) => set({ keyPanelMode: mode, keyPanelOpen: true }),
   addKey: (key) => set((state) => ({ keys: [...state.keys, key] })),
-  updateKey: (id, updates) => set((state) => ({
-    keys: state.keys.map(k => k.id === id ? { ...k, ...updates } : k)
-  })),
+  updateKey: (id, updates) => set((state) => ({ keys: state.keys.map(k => k.id === id ? { ...k, ...updates } : k) })),
   removeKey: (id) => set((state) => ({
     keys: state.keys.filter(k => k.id !== id),
     selectedKeyId: state.selectedKeyId === id ? null : state.selectedKeyId,
     keyPanelOpen: state.selectedKeyId === id ? false : state.keyPanelOpen,
   })),
   setKeyMenuOpen: (open) => set({ keyMenuOpen: open }),
+
+  // Forwarding Actions
   setSelectedRule: (id) => set({ selectedRuleId: id }),
   setForwardingPanelOpen: (open) => set({ forwardingPanelOpen: open }),
   setForwardingType: (type) => set({ forwardingType: type, forwardingPanelOpen: true }),
   addForwardingRule: (rule) => set((state) => ({ forwardingRules: [...state.forwardingRules, rule] })),
   removeForwardingRule: (id) => set((state) => ({
-  forwardingRules: state.forwardingRules.filter(r => r.id !== id),
-  selectedRuleId: state.selectedRuleId === id ? null : state.selectedRuleId,
-  forwardingPanelOpen: state.selectedRuleId === id ? false : state.forwardingPanelOpen,
+    forwardingRules: state.forwardingRules.filter(r => r.id !== id),
+    selectedRuleId: state.selectedRuleId === id ? null : state.selectedRuleId,
+    forwardingPanelOpen: state.selectedRuleId === id ? false : state.forwardingPanelOpen,
+  })),
+  setForwardingMenuOpen: (open) => set({ forwardingMenuOpen: open }),
 
+  // Snippets Actions
   setSelectedSnippet: (id) => set({ selectedSnippetId: id }),
   setSnippetPanelOpen: (open) => set({ snippetPanelOpen: open }),
   addSnippet: (snippet) => set((state) => ({ snippets: [...state.snippets, snippet] })),
-  updateSnippet: (id, updates) => set((state) => ({
-    snippets: state.snippets.map(s => s.id === id ? { ...s, ...updates } : s)
-  })),
+  updateSnippet: (id, updates) => set((state) => ({ snippets: state.snippets.map(s => s.id === id ? { ...s, ...updates } : s) })),
   removeSnippet: (id) => set((state) => ({
     snippets: state.snippets.filter(s => s.id !== id),
     selectedSnippetId: state.selectedSnippetId === id ? null : state.selectedSnippetId,
@@ -355,64 +361,41 @@ export const useStore = create<AppState>((set, get) => ({
   setSnippetMenuOpen: (open) => set({ snippetMenuOpen: open }),
   setShowShellHistory: (show) => set({ showShellHistory: show }),
 
+  // Tabs Actions
   addConnectionTab: (hostId) => {
-  const host = get().hosts.find(h => h.id === hostId);
-  if (!host) return;
-  
-  const newTab: Tab = {
-    id: `tab-${Date.now()}`,
-    type: 'connection',
-    label: host.label,
-    hostId,
-    connectionStatus: 'connecting',
-    connectionLog: [],
-  };
-  
-  set((state) => ({
-    tabs: [...state.tabs, newTab],
-    activeTabId: newTab.id,
-  }));
-},
+    const host = get().hosts.find(h => h.id === hostId);
+    if (!host) return;
+    
+    const newTab: Tab = {
+      id: `tab-${Date.now()}`,
+      type: 'connection',
+      label: host.label,
+      hostId,
+      connectionStatus: 'connecting',
+      connectionLog: [],
+    };
+    
+    set((state) => ({
+      tabs: [...state.tabs, newTab],
+      activeTabId: newTab.id,
+    }));
+  },
 
-setActiveTab: (tabId) => set({ activeTabId: tabId }),
+  setActiveTab: (tabId) => set({ activeTabId: tabId }),
 
-closeTab: (tabId) => set((state) => {
-  const newTabs = state.tabs.filter(t => t.id !== tabId);
-  const newActiveTabId = state.activeTabId === tabId 
-    ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : 'tab-vaults')
-    : state.activeTabId;
-  return { tabs: newTabs, activeTabId: newActiveTabId };
-}),
+  closeTab: (tabId) => set((state) => {
+    const newTabs = state.tabs.filter(t => t.id !== tabId);
+    const newActiveTabId = state.activeTabId === tabId 
+      ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : 'tab-vaults')
+      : state.activeTabId;
+    return { tabs: newTabs, activeTabId: newActiveTabId };
+  }),
 
-updateConnectionStatus: (tabId, status) => set((state) => ({
-  tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionStatus: status } : t)
-})),
+  updateConnectionStatus: (tabId, status) => set((state) => ({
+    tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionStatus: status } : t)
+  })),
 
-addConnectionLog: (tabId, log) => set((state) => ({
-  tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionLog: [...(t.connectionLog || []), log] } : t)
-})),
-})),
-
-
-snippets: [],
-shellHistory: [
-  { id: 'sh1', command: 'clear', executedAt: Date.now() - 100000 },
-  { id: 'sh2', command: 'ip a', executedAt: Date.now() - 90000 },
-  { id: 'sh3', command: 'sudo apt-get update && sudo apt-get upgrade -y', executedAt: Date.now() - 80000 },
-  { id: 'sh4', command: 'sudo apt-get install -y kubelet kubeadm kubectl', executedAt: Date.now() - 70000 },
-  { id: 'sh5', command: 'sudo apt-get update', executedAt: Date.now() - 60000 },
-  { id: 'sh6', command: 'sudo apt-get install -y apt-transport-https ca-certificates curl', executedAt: Date.now() - 50000 },
-  { id: 'sh7', command: 'sudo sysctl --system', executedAt: Date.now() - 40000 },
-  { id: 'sh8', command: 'net.ipv4.ip_forward = 1', executedAt: Date.now() - 30000 },
-  { id: 'sh9', command: 'net.bridge.bridge-nf-call-ip6tables = 1', executedAt: Date.now() - 20000 },
-  { id: 'sh10', command: 'sudo modprobe br_netfilter', executedAt: Date.now() - 10000 },
-  { id: 'sh11', command: 'sudo modprobe overlay', executedAt: Date.now() - 5000 },
-],
-selectedSnippetId: null,
-snippetPanelOpen: false,
-snippetMenuOpen: false,
-showShellHistory: false,
-setForwardingMenuOpen: (open) => set({ forwardingMenuOpen: open }),
-
-
+  addConnectionLog: (tabId, log) => set((state) => ({
+    tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionLog: [...(t.connectionLog || []), log] } : t)
+  })),
 }));

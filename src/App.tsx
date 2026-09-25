@@ -13,14 +13,13 @@ import { KeychainPage } from './components/KeychainPage';
 import { PortForwardingPage } from './components/PortForwardingPage';
 import { SnippetsPage } from './components/SnippetsPage';
 import { NewTabOverlay } from './components/NewTabOverlay';
-import { ConnectionPage } from './components/ConnectionPage';
 import { useStore } from './store';
 
 function App() {
   const { 
     searchQuery, setSearchQuery, openNewHostPanel, activePage, activeTopTab, setActiveTopTab,
     selectedTags, tagFilterOpen, setTagFilterOpen, newHostMenuOpen, setNewHostMenuOpen,
-    newTabOpen, setNewTabOpen, tabs, activeTabId, setActiveTab
+    newTabOpen, setNewTabOpen
   } = useStore();
 
   const newHostMenuRef = useRef<HTMLDivElement>(null);
@@ -50,59 +49,41 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [newHostMenuOpen, setNewHostMenuOpen]);
 
-  const activeTab = tabs.find(t => t.id === activeTabId);
-
   return (
     <div className="flex h-screen bg-[#1e1e2e] text-gray-300 font-sans overflow-hidden">
       <Sidebar />
       
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Верхние вкладки (Vaults, SFTP, Serial) + вкладки подключений */}
-        <div className="h-10 bg-[#16161e] border-b border-[#2a2a3a] flex items-center px-2 space-x-1 flex-shrink-0 overflow-x-auto">
+        {/* Верхние вкладки */}
+        <div className="h-10 bg-[#16161e] border-b border-[#2a2a3a] flex items-center px-4 space-x-1 flex-shrink-0">
           <TopTabButton 
-            active={activeTopTab === 'vaults' && activeTab?.type === 'vaults'} 
-            onClick={() => { setActiveTopTab('vaults'); setActiveTab('tab-vaults'); }}
+            active={activeTopTab === 'vaults'} 
+            onClick={() => setActiveTopTab('vaults')}
             icon={<Folder size={14} />}
             label="Vaults"
           />
           <TopTabButton 
-            active={activeTopTab === 'sftp' && activeTab?.type === 'sftp'} 
-            onClick={() => { setActiveTopTab('sftp'); setActiveTab('tab-sftp'); }}
+            active={activeTopTab === 'sftp'} 
+            onClick={() => setActiveTopTab('sftp')}
             icon={<Folder size={14} />}
             label="SFTP"
           />
           <TopTabButton 
-            active={activeTopTab === 'serial' && activeTab?.type === 'serial'} 
-            onClick={() => { setActiveTopTab('serial'); setActiveTab('tab-serial'); }}
+            active={activeTopTab === 'serial'} 
+            onClick={() => setActiveTopTab('serial')}
             icon={<Usb size={14} />}
             label="Serial"
           />
-          
-          {/* Вкладки подключений */}
-          {tabs.filter(t => t.type === 'connection').map(tab => (
-            <ConnectionTabButton
-              key={tab.id}
-              tab={tab}
-              isActive={activeTabId === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-            />
-          ))}
-          
           <button 
             onClick={() => setNewTabOpen(true)}
-            className="ml-2 text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
+            className="ml-2 text-gray-500 hover:text-gray-300 transition-colors"
           >
             <Plus size={16} />
           </button>
         </div>
 
-        {/* Страница подключения */}
-        {activeTab?.type === 'connection' && activeTab.hostId && (
-          <ConnectionPage tabId={activeTab.id} />
-        )}
-
-        {/* Обычные страницы */}
-        {activeTopTab === 'vaults' && activePage === 'hosts' && activeTab?.type !== 'connection' && (
+        {/* Контент */}
+        {activeTopTab === 'vaults' && activePage === 'hosts' && (
           <>
             <header className="h-14 bg-[#1e1e2e] border-b border-[#2a2a3a] flex items-center px-4 space-x-4 flex-shrink-0 relative">
               <div className="flex-1 relative max-w-2xl">
@@ -192,15 +173,15 @@ function App() {
           </>
         )}
 
-        {activeTopTab === 'vaults' && activePage === 'known-hosts' && activeTab?.type !== 'connection' && <KnownHostsPage />}
-        {activeTopTab === 'vaults' && activePage === 'logs' && activeTab?.type !== 'connection' && <LogsPage />}
-        {activeTopTab === 'vaults' && activePage === 'port-forwarding' && activeTab?.type !== 'connection' && <PortForwardingPage />}
-        {activeTopTab === 'vaults' && activePage === 'keychain' && activeTab?.type !== 'connection' && <KeychainPage />}
-        {activeTopTab === 'vaults' && activePage === 'snippets' && activeTab?.type !== 'connection' && <SnippetsPage />}
-        {activeTopTab === 'serial' && activeTab?.type !== 'connection' && <SerialPage />}
-        {activeTopTab === 'sftp' && activeTab?.type !== 'connection' && <SftpPage />}
+        {activeTopTab === 'vaults' && activePage === 'known-hosts' && <KnownHostsPage />}
+        {activeTopTab === 'vaults' && activePage === 'logs' && <LogsPage />}
+        {activeTopTab === 'vaults' && activePage === 'port-forwarding' && <PortForwardingPage />}
+        {activeTopTab === 'vaults' && activePage === 'keychain' && <KeychainPage />}
+        {activeTopTab === 'vaults' && activePage === 'snippets' && <SnippetsPage />}
+        {activeTopTab === 'serial' && <SerialPage />}
+        {activeTopTab === 'sftp' && <SftpPage />}
 
-        {activeTopTab === 'vaults' && !['hosts', 'known-hosts', 'logs', 'port-forwarding', 'keychain', 'snippets'].includes(activePage) && activeTab?.type !== 'connection' && (
+        {activeTopTab === 'vaults' && !['hosts', 'known-hosts', 'logs', 'port-forwarding', 'keychain', 'snippets'].includes(activePage) && (
           <div className="flex-1 flex items-center justify-center text-gray-500">
             <p>Раздел "{activePage}" в разработке</p>
           </div>
@@ -219,7 +200,7 @@ function TopTabButton({ active, onClick, icon, label }: { active: boolean; onCli
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center space-x-2 transition-colors flex-shrink-0 ${
+      className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center space-x-2 transition-colors ${
         active 
           ? 'bg-[#2a2a3a] text-gray-200' 
           : 'text-gray-400 hover:text-gray-200 hover:bg-[#252535]'
@@ -227,26 +208,6 @@ function TopTabButton({ active, onClick, icon, label }: { active: boolean; onCli
     >
       {icon}
       <span>{label}</span>
-    </button>
-  );
-}
-
-function ConnectionTabButton({ tab, isActive, onClick }: { tab: any; isActive: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center space-x-2 transition-colors flex-shrink-0 ${
-        isActive 
-          ? 'bg-[#2a2a3a] text-gray-200' 
-          : 'text-gray-400 hover:text-gray-200 hover:bg-[#252535]'
-      }`}
-    >
-      <div className={`w-2 h-2 rounded-full ${
-        tab.connectionStatus === 'connected' ? 'bg-green-400' :
-        tab.connectionStatus === 'failed' ? 'bg-red-400' :
-        'bg-blue-400 animate-pulse'
-      }`} />
-      <span>{tab.label}</span>
     </button>
   );
 }
