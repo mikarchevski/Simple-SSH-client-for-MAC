@@ -48,8 +48,16 @@ export function RightPanel() {
           ) : null}
         </div>
 
-        <div className="p-4 border-t border-[#2a2a3a]">
-          <button className="w-full bg-[#007AFF] hover:bg-[#0062cc] text-white py-2.5 rounded-md text-sm font-medium transition-colors">
+                <div className="p-4 border-t border-[#2a3a4a]">
+          <button 
+            onClick={() => {
+              if (selectedHostId) {
+                useStore.getState().addConnectionTab(selectedHostId);
+                closePanel();
+              }
+            }}
+            className="w-full bg-[#007AFF] hover:bg-[#0062cc] text-white py-2.5 rounded-md text-sm font-medium transition-colors"
+          >
             Connect
           </button>
         </div>
