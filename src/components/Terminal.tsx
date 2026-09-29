@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -13,7 +13,6 @@ interface TerminalProps {
 export function Terminal({ sessionId }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
-  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     if (!terminalRef.current) {
@@ -21,9 +20,8 @@ export function Terminal({ sessionId }: TerminalProps) {
       return;
     }
 
-    console.log('✅ Terminal container found, size:', terminalRef.current.getBoundingClientRect());
+    console.log('✅ Terminal container found, initializing...');
 
-    // Инициализация терминала
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 14,
@@ -38,30 +36,30 @@ export function Terminal({ sessionId }: TerminalProps) {
     });
 
     const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    
     term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
+    term.loadAddon(new WebLinksAddon());
     
-    // Открываем терминал в контейнере
     term.open(terminalRef.current);
     termRef.current = term;
 
-    // Ждём, пока элемент получит размеры, потом делаем fit
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       fitAddon.fit();
       console.log('✅ Terminal fitted, size:', term.cols, 'x', term.rows);
-      setIsReady(true);
-    });
+      term.focus();
+      console.log('✅ Terminal focused');
+    }, 100);
 
-    // Обработка ввода пользователя
+    // === ВАЖНО: Отслеживаем ввод пользователя ===
     const onDataDisposable = term.onData((data) => {
-      console.log('️ Sending data:', JSON.stringify(data));
+      console.log('⌨️ User typed:', JSON.stringify(data));
+      console.log('📤 Sending to session:', sessionId);
+      
       invoke('ssh_send', { sessionId, data })
-        .catch((err) => console.error(' Failed to send data:', err));
+        .then(() => console.log('✅ Data sent successfully'))
+        .catch((err) => console.error('❌ Failed to send data:', err));
     });
 
-    // Обработка ресайза
+    // Отслеживаем ресайз
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
       if (termRef.current) {
@@ -69,15 +67,17 @@ export function Terminal({ sessionId }: TerminalProps) {
           sessionId,
           cols: termRef.current.cols,
           rows: termRef.current.rows,
-        }).catch((err) => console.error('❌ Failed to resize:', err));
+        }).catch(console.error);
       }
     });
+    
     resizeObserver.observe(terminalRef.current);
 
     // Слушаем данные от сервера
     const unlistenData = listen<[string, string]>('ssh-data', (event) => {
       const [eventId, data] = event.payload;
-      console.log('📥 Received data for', eventId, ':', data.substring(0, 50));
+      console.log(' Received from server for', eventId, ':', data.substring(0, 100));
+      
       if (eventId === sessionId && termRef.current) {
         termRef.current.write(data);
       }
@@ -90,15 +90,20 @@ export function Terminal({ sessionId }: TerminalProps) {
       }
     });
 
-    // Фокус на терминал
-    setTimeout(() => term.focus(), 100);
+    // Принудительный фокус при клике на терминал
+    const handleFocus = () => {
+      term.focus();
+      console.log('🎯 Terminal focused by click');
+    };
+    
+    terminalRef.current.addEventListener('click', handleFocus);
 
-    // Очистка при размонтировании
     return () => {
       resizeObserver.disconnect();
       onDataDisposable.dispose();
       unlistenData.then(fn => fn());
       unlistenClosed.then(fn => fn());
+      terminalRef.current?.removeEventListener('click', handleFocus);
       term.dispose();
     };
   }, [sessionId]);
@@ -106,12 +111,9 @@ export function Terminal({ sessionId }: TerminalProps) {
   return (
     <div 
       ref={terminalRef} 
-      className="w-full h-full"
-      style={{ 
-        width: '100%', 
-        height: '100%',
-        minHeight: '500px'
-      }}
+      className="w-full h-full outline-none"
+      tabIndex={0}
+      style={{ height: '100%', width: '100%' }}
     />
   );
 }

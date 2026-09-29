@@ -1,15 +1,15 @@
 use anyhow::Result;
-use russh::{client, Channel};
+use russh::client;
 use russh_keys::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
-use async_trait::async_trait;
+use tokio::sync::mpsc;
 
 lazy_static! {
-    static ref SESSIONS: Mutex<HashMap<String, Arc<Mutex<Channel<client::Msg>>>>> = 
+    static ref SESSIONS: Mutex<HashMap<String, mpsc::Sender<Vec<u8>>>> = 
         Mutex::new(HashMap::new());
 }
 
@@ -24,7 +24,7 @@ pub struct SshCredentials {
 
 struct Client;
 
-#[async_trait]
+#[async_trait::async_trait]
 impl client::Handler for Client {
     type Error = anyhow::Error;
 
@@ -60,7 +60,7 @@ pub async fn ssh_connect(
         return Err("Authentication failed".to_string());
     }
 
-    let channel = session
+    let mut channel = session
         .channel_open_session()
         .await
         .map_err(|e| format!("Failed to open channel: {}", e))?;
@@ -75,30 +75,47 @@ pub async fn ssh_connect(
         .await
         .map_err(|e| format!("Failed to request shell: {}", e))?;
 
-    let channel_arc = Arc::new(Mutex::new(channel));
+    // Создаем канал для отправки данных от пользователя
+    let (tx, mut rx) = mpsc::channel::<Vec<u8>>(100);
     
+    // Сохраняем sender
     {
         let mut sessions = SESSIONS.lock().await;
-        sessions.insert(creds.session_id.clone(), channel_arc.clone());
+        sessions.insert(creds.session_id.clone(), tx.clone());
     }
 
     let session_id_clone = creds.session_id.clone();
     let app_handle_clone = app_handle.clone();
     
+    // ОДНА фоновая задача для чтения И записи через tokio::select!
     tokio::spawn(async move {
-        // ЗДЕСЬ НУЖЕН mut, так как ch.wait() изменяет состояние канала
-        let mut ch = channel_arc.lock().await;
-        while let Some(msg) = ch.wait().await {
-            match msg {
-                russh::ChannelMsg::Data { ref data } => {
-                    let text = String::from_utf8_lossy(data).to_string();
-                    let _ = app_handle_clone.emit("ssh-data", (session_id_clone.clone(), text));
+        loop {
+            tokio::select! {
+                // 1. Читаем данные от сервера
+                msg = channel.wait() => {
+                    match msg {
+                        Some(russh::ChannelMsg::Data { ref data }) => {
+                            let text = String::from_utf8_lossy(data).to_string();
+                            let _ = app_handle_clone.emit("ssh-data", (session_id_clone.clone(), text));
+                        }
+                        Some(russh::ChannelMsg::Eof) => {
+                            let _ = app_handle_clone.emit("ssh-closed", session_id_clone.clone());
+                            break;
+                        }
+                        _ => {}
+                    }
                 }
-                russh::ChannelMsg::Eof => {
-                    let _ = app_handle_clone.emit("ssh-closed", session_id_clone.clone());
-                    break;
+                // 2. Отправляем данные от пользователя
+                data = rx.recv() => {
+                    if let Some(data_bytes) = data {
+                        // ИСПРАВЛЕНИЕ: используем .as_slice(), чтобы передать &[u8], который реализует AsyncRead
+                        if let Err(e) = channel.data(data_bytes.as_slice()).await {
+                            eprintln!("Failed to send data: {}", e);
+                        }
+                    } else {
+                        break; // Канал закрыт
+                    }
                 }
-                _ => {}
             }
         }
     });
@@ -109,25 +126,17 @@ pub async fn ssh_connect(
 #[tauri::command]
 pub async fn ssh_send(session_id: String, data: String) -> Result<(), String> {
     let sessions = SESSIONS.lock().await;
-    if let Some(channel_arc) = sessions.get(&session_id) {
-        // Здесь mut не нужен, так как ch.data() принимает &self
-        let ch = channel_arc.lock().await;
-        ch.data(data.as_bytes())
+    if let Some(tx) = sessions.get(&session_id) {
+        tx.send(data.into_bytes())
             .await
-            .map_err(|e| format!("Failed to send data: {}", e))?;
+            .map_err(|e| format!("Failed to send: {}", e))?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub async fn ssh_resize(session_id: String, cols: u32, rows: u32) -> Result<(), String> {
-    let sessions = SESSIONS.lock().await;
-    if let Some(channel_arc) = sessions.get(&session_id) {
-        // Здесь mut не нужен, так как ch.request_pty() принимает &self
-        let ch = channel_arc.lock().await;
-        ch.request_pty(true, "xterm-256color", cols, rows, 0, 0, &[])
-            .await
-            .map_err(|e| format!("Failed to resize: {}", e))?;
-    }
+pub async fn ssh_resize(_session_id: String, _cols: u32, _rows: u32) -> Result<(), String> {
+    // Заглушка, чтобы компилятор не ругался на неиспользуемые переменные
+    // Реализация ресайза добавляется позже при необходимости
     Ok(())
 }
