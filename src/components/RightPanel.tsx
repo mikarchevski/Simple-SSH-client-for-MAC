@@ -3,11 +3,14 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 
 export function RightPanel() {
-  const { isPanelOpen, panelMode, selectedHostId, hosts, closePanel, addHost, updateHost, panelMenuOpen, togglePanelMenu, closePanelMenu, duplicateHost, openDeleteModal, openHostDetails } = useStore();
+  const { 
+    isPanelOpen, panelMode, selectedHostId, hosts, closePanel, addHost, updateHost, 
+    panelMenuOpen, togglePanelMenu, closePanelMenu, duplicateHost, openDeleteModal 
+  } = useStore();
+  
   const selectedHost = hosts.find(h => h.id === selectedHostId);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Закрытие меню при клике вне
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -26,14 +29,17 @@ export function RightPanel() {
       <div className="fixed right-0 top-0 h-full w-96 bg-[#1e1e2e] border-l border-[#2a2a3a] z-50 shadow-2xl flex flex-col">
         <PanelHeader mode={panelMode} onClose={closePanel} />
         
-        {/* Выпадающее меню троеточия */}
         {panelMenuOpen && panelMode === 'details' && (
           <div 
             ref={menuRef}
             className="absolute right-4 top-14 bg-[#252535] border border-[#3a3a4a] rounded-lg shadow-2xl py-1.5 min-w-[180px] z-50"
           >
-            <PanelMenuItem label="Connect" onClick={() => { closePanelMenu(); }} />
-            <PanelMenuItem label="Add Telnet" onClick={() => { closePanelMenu(); }} />
+            <PanelMenuItem label="Connect" onClick={() => { 
+              if (selectedHostId) useStore.getState().addConnectionTab(selectedHostId);
+              closePanelMenu(); 
+              closePanel();
+            }} />
+            <PanelMenuItem label="Add Telnet" onClick={closePanelMenu} />
             <PanelMenuItem label="Duplicate" onClick={() => { duplicateHost(selectedHostId!); closePanelMenu(); }} />
             <div className="my-1 border-t border-[#3a3a4a]" />
             <PanelMenuItem label="Remove" danger onClick={() => openDeleteModal(selectedHostId!)} />
@@ -48,7 +54,7 @@ export function RightPanel() {
           ) : null}
         </div>
 
-                <div className="p-4 border-t border-[#2a3a4a]">
+        <div className="p-4 border-t border-[#2a3a4a]">
           <button 
             onClick={() => {
               if (selectedHostId) {
@@ -65,6 +71,310 @@ export function RightPanel() {
     </>
   );
 }
+
+// --- КОМПОНЕНТЫ ФОРМЫ ---
+
+function TagInput({ tags = [], onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [inputValue, setInputValue] = useState('');
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const newTag = inputValue.trim();
+      if (newTag && !tags.includes(newTag)) {
+        onChange([...tags, newTag]);
+      }
+      setInputValue('');
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    onChange(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  return (
+    <div className="bg-[#1e1e2e] border border-[#3a3a4a] rounded-md p-2 flex flex-wrap gap-2 items-center">
+      {tags.map(tag => (
+        <span key={tag} className="px-2 py-1 bg-[#3a3a4a] text-xs text-gray-300 rounded flex items-center space-x-1">
+          <Tag size={10} />
+          <span>{tag}</span>
+          <button onClick={() => removeTag(tag)} className="hover:text-white ml-1">×</button>
+        </span>
+      ))}
+      <input
+        type="text"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Add tag..."
+        className="flex-1 min-w-[100px] bg-transparent text-gray-200 text-sm focus:outline-none placeholder-gray-500"
+      />
+    </div>
+  );
+}
+
+function GroupSelector({ groupId, groups, onChange }: { groupId?: string; groups: any[]; onChange: (groupId: string | undefined) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Получаем функцию добавления группы из store
+  const addGroup = useStore((state) => state.addGroup);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setIsCreating(false);
+      }
+    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const selectedGroup = groups.find(g => g.id === groupId);
+
+  const handleCreateGroup = () => {
+    if (newGroupName.trim()) {
+      const newGroupId = `g${Date.now()}`;
+      const newGroup = {
+        id: newGroupId,
+        name: newGroupName.trim(),
+        count: 1
+      };
+      
+      // 1. Сохраняем группу в глобальный store
+      addGroup(newGroup);
+      // 2. Привязываем текущий хост к этой новой группе
+      onChange(newGroupId);
+      
+      setNewGroupName('');
+      setIsCreating(false);
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-[#1e1e2e] text-gray-400 rounded-md px-3 py-2 text-sm border border-[#3a3a4a] hover:border-[#4a4a5a] transition-colors flex items-center justify-between"
+      >
+        <span className="flex items-center space-x-2">
+          <Folder size={14} />
+          <span>{selectedGroup?.name || 'No group'}</span>
+        </span>
+        <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-[#252535] border border-[#3a3a4a] rounded-lg shadow-2xl py-1.5 z-50 min-w-[200px]">
+          <button
+            onClick={() => { onChange(undefined); setIsOpen(false); }}
+            className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors text-gray-400"
+          >
+            No group
+          </button>
+          
+          {groups.map(group => (
+            <button
+              key={group.id}
+              onClick={() => { onChange(group.id); setIsOpen(false); }}
+              className={`w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors ${
+                groupId === group.id ? 'text-blue-400' : 'text-gray-200'
+              }`}
+            >
+              {group.name}
+            </button>
+          ))}
+
+          <div className="my-1 border-t border-[#3a3a4a]" />
+
+          {isCreating ? (
+            <div className="px-3 py-2">
+              <input
+                type="text"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateGroup();
+                  if (e.key === 'Escape') setIsCreating(false);
+                }}
+                placeholder="Group name..."
+                className="w-full bg-[#1e1e2e] text-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]"
+                autoFocus
+              />
+              <div className="flex space-x-2 mt-2">
+                <button onClick={handleCreateGroup} className="flex-1 bg-[#007AFF] hover:bg-[#0062cc] text-white px-2 py-1 rounded text-xs">Create</button>
+                <button onClick={() => setIsCreating(false)} className="flex-1 bg-[#3a3a4a] hover:bg-[#4a4a5a] text-gray-300 px-2 py-1 rounded text-xs">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsCreating(true)}
+              className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors text-blue-400 flex items-center space-x-2"
+            >
+              <Plus size={12} />
+              <span>Create new group</span>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) => void }) {
+  // ✅ FIX: Добавляем || [] на случай, если tags undefined у старых хостов
+  const [form, setForm] = useState({ 
+    address: host.address, 
+    label: host.label, 
+    port: host.port, 
+    username: host.username, 
+    password: host.password, 
+    tags: host.tags || [], 
+    groupId: host.groupId
+  });
+
+  const groups = useStore((state) => state.groups);
+
+  // Автосохранение при изменении формы
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onSave(form);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [form, onSave]);
+
+  return (
+    <>
+      <FormSection title="Address">
+        <div className="flex items-center space-x-3">
+          <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-400 flex-shrink-0">
+            <Server size={18} />
+          </div>
+          <input type="text" value={form.address} onChange={(e) => setForm({...form, address: e.target.value})}
+            className="flex-1 bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]" />
+        </div>
+      </FormSection>
+      <FormSection title="General">
+        <input type="text" value={form.label} onChange={(e) => setForm({...form, label: e.target.value})}
+          className="w-full bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] mb-3" placeholder="Label" />
+        
+        <div className="mb-3">
+          <label className="text-xs text-gray-500 mb-1 block">Group</label>
+          <GroupSelector
+            groupId={form.groupId}
+            groups={groups}
+            onChange={(newGroupId) => setForm({...form, groupId: newGroupId})}
+          />
+        </div>
+
+        <div className="mt-3">
+          <label className="text-xs text-gray-500 mb-1 block">Tags</label>
+          <TagInput 
+            tags={form.tags} 
+            onChange={(newTags) => setForm({...form, tags: newTags})} 
+          />
+        </div>
+
+        <FormButton icon={<HardDrive size={14} />} label="Backspace" rightLabel="Default" />
+      </FormSection>
+      <button className="w-full bg-[#252535] border border-[#333] rounded-lg p-4 text-blue-400 hover:bg-[#2a2a3a] transition-colors flex items-center justify-center space-x-2">
+        <Users size={16} /><span className="text-sm">Share this host</span>
+      </button>
+      <FormSection title="SSH">
+        <div className="flex items-center space-x-2 text-sm text-gray-300">
+          <span>on</span>
+          <input type="number" value={form.port} onChange={(e) => setForm({...form, port: parseInt(e.target.value) || 22})}
+            className="w-16 bg-[#1e1e2e] text-gray-200 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]" />
+          <span>port</span>
+        </div>
+      </FormSection>
+      <CredentialsSection form={form} setForm={setForm} showMergeHint />
+      <AdvancedOptions />
+    </>
+  );
+}
+
+function NewHostForm({ onSave }: { onSave: (host: any) => void }) {
+  const [form, setForm] = useState({
+    address: '',
+    label: '',
+    port: 22,
+    username: '',
+    password: '',
+    tags: [] as string[],
+  });
+
+  const handleSubmit = () => {
+    if (!form.address) return;
+    const newHost = {
+      id: `h${Date.now()}`,
+      ...form,
+      os: 'generic' as const,
+      createdAt: Date.now(),
+    };
+    onSave(newHost);
+    useStore.getState().addConnectionTab(newHost.id);
+  };
+
+  return (
+    <>
+      <FormSection title="Address">
+        <div className="flex items-center space-x-3">
+          <div className="w-9 h-9 rounded bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
+            <Server size={18} />
+          </div>
+          <input
+            type="text"
+            value={form.address}
+            onChange={(e) => setForm({...form, address: e.target.value})}
+            className="flex-1 bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] placeholder-gray-500"
+            placeholder="IP or Hostname"
+          />
+        </div>
+      </FormSection>
+      <FormSection title="General">
+        <input
+          type="text"
+          value={form.label}
+          onChange={(e) => setForm({...form, label: e.target.value})}
+          className="w-full bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] placeholder-gray-500 mb-3"
+          placeholder="Label"
+        />
+        <FormButton icon={<Folder size={14} />} label="Parent Group" />
+        <FormButton icon={<Tag size={14} />} label="Tags" />
+      </FormSection>
+      <FormSection title="SSH">
+        <div className="flex items-center space-x-2 text-sm text-gray-300">
+          <span>on</span>
+          <input
+            type="number"
+            value={form.port}
+            onChange={(e) => setForm({...form, port: parseInt(e.target.value) || 22})}
+            className="w-16 bg-[#1e1e2e] text-gray-200 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]"
+          />
+          <span>port</span>
+        </div>
+      </FormSection>
+      <CredentialsSection form={form} setForm={setForm} />
+      <AdvancedOptions />
+      <div className="pt-4">
+        <button 
+          onClick={handleSubmit}
+          disabled={!form.address}
+          className="w-full bg-[#007AFF] hover:bg-[#0062cc] disabled:bg-[#3a3a4a] disabled:cursor-not-allowed text-white py-2.5 rounded-md text-sm font-medium transition-colors"
+        >
+          Connect
+        </button>
+      </div>
+    </>
+  );
+}
+
+// --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 
 function PanelHeader({ mode, onClose }: { mode: 'new' | 'details'; onClose: () => void }) {
   const { panelMenuOpen, togglePanelMenu } = useStore();
@@ -98,142 +408,6 @@ function PanelMenuItem({ label, danger, onClick }: { label: string; danger?: boo
     >
       {label}
     </button>
-  );
-}
-
-// Остальные компоненты формы (NewHostForm, HostDetailsForm, FormSection, FormButton, CredentialsSection, AdvancedOptions) 
-// оставляем как в предыдущем ответе — они не меняются
-// Просто скопируй их из предыдущего RightPanel.tsx сюда
-
-function NewHostForm({ onSave }: { onSave: (host: any) => void }) {
-  const [form, setForm] = useState({
-    address: '',
-    label: '',
-    port: 22,
-    username: '',
-    password: '',
-    tags: [] as string[],
-  });
-
-  const handleSubmit = () => {
-    if (!form.address) return;
-    
-    // 1. Создаем новый хост
-    const newHost = {
-      id: `h${Date.now()}`,
-      ...form,
-      os: 'generic' as const,
-      createdAt: Date.now(),
-    };
-    
-    // 2. Сохраняем его в store
-    onSave(newHost);
-    
-    // 3. СРАЗУ открываем вкладку подключения к этому новому хосту!
-    useStore.getState().addConnectionTab(newHost.id);
-  };
-
-  return (
-    <>
-      <FormSection title="Address">
-        <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
-            <Server size={18} />
-          </div>
-          <input
-            type="text"
-            value={form.address}
-            onChange={(e) => setForm({...form, address: e.target.value})}
-            className="flex-1 bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] placeholder-gray-500"
-            placeholder="IP or Hostname"
-          />
-        </div>
-      </FormSection>
-
-      <FormSection title="General">
-        <input
-          type="text"
-          value={form.label}
-          onChange={(e) => setForm({...form, label: e.target.value})}
-          className="w-full bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] placeholder-gray-500 mb-3"
-          placeholder="Label"
-        />
-        <FormButton icon={<Folder size={14} />} label="Parent Group" />
-        <FormButton icon={<Tag size={14} />} label="Tags" />
-      </FormSection>
-
-      <FormSection title="SSH">
-        <div className="flex items-center space-x-2 text-sm text-gray-300">
-          <span>on</span>
-          <input
-            type="number"
-            value={form.port}
-            onChange={(e) => setForm({...form, port: parseInt(e.target.value) || 22})}
-            className="w-16 bg-[#1e1e2e] text-gray-200 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]"
-          />
-          <span>port</span>
-        </div>
-      </FormSection>
-
-      <CredentialsSection form={form} setForm={setForm} />
-
-      <AdvancedOptions />
-      
-      {/* Кнопка, которая теперь сохраняет И подключается */}
-      <div className="pt-4">
-        <button 
-          onClick={handleSubmit}
-          disabled={!form.address}
-          className="w-full bg-[#007AFF] hover:bg-[#0062cc] disabled:bg-[#3a3a4a] disabled:cursor-not-allowed text-white py-2.5 rounded-md text-sm font-medium transition-colors"
-        >
-          Connect
-        </button>
-      </div>
-    </>
-  );
-}
-
-function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) => void }) {
-  const [form, setForm] = useState({ address: host.address, label: host.label, port: host.port, username: host.username, password: host.password, tags: host.tags });
-  return (
-    <>
-      <FormSection title="Address">
-        <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-400 flex-shrink-0">
-            <Server size={18} />
-          </div>
-          <input type="text" value={form.address} onChange={(e) => setForm({...form, address: e.target.value})}
-            className="flex-1 bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]" />
-        </div>
-      </FormSection>
-      <FormSection title="General">
-        <input type="text" value={form.label} onChange={(e) => setForm({...form, label: e.target.value})}
-          className="w-full bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] mb-3" />
-        <FormButton icon={<Folder size={14} />} label="Kuber" />
-        <div className="flex flex-wrap gap-2 mb-3">
-          {form.tags.map((tag: string) => (
-            <span key={tag} className="px-2 py-1 bg-[#3a3a4a] text-xs text-gray-300 rounded flex items-center space-x-1">
-              <Tag size={10} /><span>{tag}</span>
-              <button className="hover:text-white">×</button>
-            </span>
-          ))}
-        </div>
-        <FormButton icon={<HardDrive size={14} />} label="Backspace" rightLabel="Default" />
-      </FormSection>
-      <button className="w-full bg-[#252535] border border-[#333] rounded-lg p-4 text-blue-400 hover:bg-[#2a2a3a] transition-colors flex items-center justify-center space-x-2">
-        <Users size={16} /><span className="text-sm">Share this host</span>
-      </button>
-      <FormSection title="SSH">
-        <div className="flex items-center space-x-2 text-sm text-gray-300">
-          <span>on</span>
-          <input type="number" value={form.port} onChange={(e) => setForm({...form, port: parseInt(e.target.value) || 22})}
-            className="w-16 bg-[#1e1e2e] text-gray-200 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]" />
-          <span>port</span>
-        </div>
-      </FormSection>
-      <CredentialsSection form={form} setForm={setForm} showMergeHint />
-      <AdvancedOptions />
-    </>
   );
 }
 

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { loadData, saveData, PersistedData } from './lib/storage';
 
 export interface Host {
   id: string;
@@ -168,6 +169,7 @@ interface AppState {
   clearTags: () => void;
   setTagFilterOpen: (open: boolean) => void;
   setNewHostMenuOpen: (open: boolean) => void;
+  addGroup: (group: Group) => void;
 
   // Actions (Keys)
   setSelectedKey: (id: string | null) => void;
@@ -234,180 +236,218 @@ const initialShellHistory: ShellHistoryEntry[] = [
   { id: 'sh4', command: 'sudo apt-get install -y kubelet kubeadm kubectl', executedAt: Date.now() - 70000 },
 ];
 
-export const useStore = create<AppState>((set, get) => ({
-  // 1. Начальные данные (State)
-  hosts: initialHosts,
-  groups: initialGroups,
-  knownHosts: initialKnownHosts,
-  logs: initialLogs,
-  keys: [],
-  forwardingRules: [],
-  snippets: [],
-  shellHistory: initialShellHistory,
-  tabs: [
-    { id: 'tab-vaults', type: 'vaults', label: 'Vaults' },
-    { id: 'tab-sftp', type: 'sftp', label: 'SFTP' },
-  ],
+// Debounce-функция: сохраняет данные на диск через 500мс после последнего изменения
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+function debouncedSave(hosts: Host[], groups: Group[]) {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    saveData({ hosts, groups });
+  }, 500);
+}
 
-  newTabOpen: false,
-  activePage: 'hosts',
-  activeTopTab: 'vaults',
-  selectedHostId: null,
-  selectedGroupId: null,
-  isPanelOpen: false,
-  panelMode: 'new',
-  searchQuery: '',
-  contextMenu: null,
-  panelMenuOpen: false,
-  pendingDeleteHostId: null,
-  knownHostsSort: 'newest',
-  knownHostsView: 'grid',
-  showInviteBanner: true,
-  selectedTags: [],
-  tagFilterOpen: false,
-  newHostMenuOpen: false,
-  selectedKeyId: null,
-  keyPanelOpen: false,
-  keyPanelMode: 'new',
-  keyMenuOpen: false,
-  selectedRuleId: null,
-  forwardingPanelOpen: false,
-  forwardingType: 'local',
-  forwardingMenuOpen: false,
-  selectedSnippetId: null,
-  snippetPanelOpen: false,
-  snippetMenuOpen: false,
-  showShellHistory: false,
-  activeTabId: 'tab-vaults',
-
-  // 2. Реализация Actions
-  setActivePage: (page) => set({ activePage: page, isPanelOpen: false, selectedHostId: null, selectedGroupId: null, contextMenu: null }),
-  setActiveTopTab: (tab) => set({ activeTopTab: tab }),
-  setSelectedHost: (id) => set({ selectedHostId: id }),
-  setSelectedGroup: (id) => set({ selectedGroupId: id }),
-  setNewTabOpen: (open) => set({ newTabOpen: open }),
-  
-  openNewHostPanel: () => set({ isPanelOpen: true, panelMode: 'new', selectedHostId: null, panelMenuOpen: false }),
-  openHostDetails: (id) => set({ isPanelOpen: true, panelMode: 'details', selectedHostId: id, panelMenuOpen: false }),
-  closePanel: () => set({ isPanelOpen: false, selectedHostId: null, panelMenuOpen: false }),
-  
-  addHost: (host) => set((state) => ({ hosts: [...state.hosts, host] })),
-  updateHost: (id, updates) => set((state) => ({ hosts: state.hosts.map(h => h.id === id ? { ...h, ...updates } : h) })),
-  duplicateHost: (id) => set((state) => {
-    const host = state.hosts.find(h => h.id === id);
-    if (!host) return state;
-    return { hosts: [...state.hosts, { ...host, id: `h${Date.now()}`, label: `${host.label} copy`, createdAt: Date.now() }] };
-  }),
-  removeHost: (id) => set((state) => ({
-    hosts: state.hosts.filter(h => h.id !== id),
-    selectedHostId: state.selectedHostId === id ? null : state.selectedHostId,
-    isPanelOpen: state.selectedHostId === id ? false : state.isPanelOpen,
-  })),
-  
-  setSearchQuery: (query) => set({ searchQuery: query }),
-  openContextMenu: (x, y, hostId) => set({ contextMenu: { x, y, hostId } }),
-  closeContextMenu: () => set({ contextMenu: null }),
-  togglePanelMenu: () => set((state) => ({ panelMenuOpen: !state.panelMenuOpen })),
-  closePanelMenu: () => set({ panelMenuOpen: false }),
-  openDeleteModal: (id) => set({ pendingDeleteHostId: id, panelMenuOpen: false, contextMenu: null }),
-  closeDeleteModal: () => set({ pendingDeleteHostId: null }),
-  setKnownHostsSort: (sort) => set({ knownHostsSort: sort }),
-  setKnownHostsView: (view) => set({ knownHostsView: view }),
-  setShowInviteBanner: (show) => set({ showInviteBanner: show }),
-  
-  toggleTag: (tag) => set((state) => {
-    const newTags = state.selectedTags.includes(tag) ? state.selectedTags.filter(t => t !== tag) : [...state.selectedTags, tag];
-    return { selectedTags: newTags };
-  }),
-  clearTags: () => set({ selectedTags: [] }),
-  setTagFilterOpen: (open) => set({ tagFilterOpen: open }),
-  setNewHostMenuOpen: (open) => set({ newHostMenuOpen: open }),
-
-  // Keys Actions
-  setSelectedKey: (id) => set({ selectedKeyId: id }),
-  setKeyPanelOpen: (open) => set({ keyPanelOpen: open }),
-  setKeyPanelMode: (mode) => set({ keyPanelMode: mode, keyPanelOpen: true }),
-  addKey: (key) => set((state) => ({ keys: [...state.keys, key] })),
-  updateKey: (id, updates) => set((state) => ({ keys: state.keys.map(k => k.id === id ? { ...k, ...updates } : k) })),
-  removeKey: (id) => set((state) => ({
-    keys: state.keys.filter(k => k.id !== id),
-    selectedKeyId: state.selectedKeyId === id ? null : state.selectedKeyId,
-    keyPanelOpen: state.selectedKeyId === id ? false : state.keyPanelOpen,
-  })),
-  setKeyMenuOpen: (open) => set({ keyMenuOpen: open }),
-
-  // Forwarding Actions
-  setSelectedRule: (id) => set({ selectedRuleId: id }),
-  setForwardingPanelOpen: (open) => set({ forwardingPanelOpen: open }),
-  setForwardingType: (type) => set({ forwardingType: type, forwardingPanelOpen: true }),
-  addForwardingRule: (rule) => set((state) => ({ forwardingRules: [...state.forwardingRules, rule] })),
-  removeForwardingRule: (id) => set((state) => ({
-    forwardingRules: state.forwardingRules.filter(r => r.id !== id),
-    selectedRuleId: state.selectedRuleId === id ? null : state.selectedRuleId,
-    forwardingPanelOpen: state.selectedRuleId === id ? false : state.forwardingPanelOpen,
-  })),
-  setForwardingMenuOpen: (open) => set({ forwardingMenuOpen: open }),
-
-  // Snippets Actions
-  setSelectedSnippet: (id) => set({ selectedSnippetId: id }),
-  setSnippetPanelOpen: (open) => set({ snippetPanelOpen: open }),
-  addSnippet: (snippet) => set((state) => ({ snippets: [...state.snippets, snippet] })),
-  updateSnippet: (id, updates) => set((state) => ({ snippets: state.snippets.map(s => s.id === id ? { ...s, ...updates } : s) })),
-  removeSnippet: (id) => set((state) => ({
-    snippets: state.snippets.filter(s => s.id !== id),
-    selectedSnippetId: state.selectedSnippetId === id ? null : state.selectedSnippetId,
-    snippetPanelOpen: state.selectedSnippetId === id ? false : state.snippetPanelOpen,
-  })),
-  setSnippetMenuOpen: (open) => set({ snippetMenuOpen: open }),
-  setShowShellHistory: (show) => set({ showShellHistory: show }),
-
-  // Tabs Actions
-  addConnectionTab: (hostId) => {
-    const host = get().hosts.find(h => h.id === hostId);
-    if (!host) return;
-    
-    const newTab: Tab = {
-      id: `tab-${Date.now()}`,
-      type: 'connection',
-      label: host.label,
-      hostId,
-      connectionStatus: 'connecting',
-      connectionLog: [],
-    };
-    
-    set((state) => ({
-      tabs: [...state.tabs, newTab],
-      activeTabId: newTab.id,
-    }));
-  },
-
-  setActiveTab: (tabId) => set({ activeTabId: tabId }),
-
-      closeTab: (tabId) => set((state) => {
-    const newTabs = state.tabs.filter(t => t.id !== tabId);
-    
-    let newActiveTabId = state.activeTabId;
-    let newActiveTopTab = state.activeTopTab;
-
-    // Если мы закрыли именно ту вкладку, которая была активна
-    if (state.activeTabId === tabId) {
-      // ВСЕГДА возвращаемся на Vaults при закрытии вкладки подключения
-      newActiveTabId = 'tab-vaults';
-      newActiveTopTab = 'vaults';
+export const useStore = create<AppState>((set, get) => {
+  // 1. Асинхронная загрузка данных при инициализации store
+  loadData().then((persisted) => {
+    if (persisted) {
+      set({ hosts: persisted.hosts, groups: persisted.groups });
     }
+  });
 
-    return { 
-      tabs: newTabs, 
-      activeTabId: newActiveTabId,
-      activeTopTab: newActiveTopTab
-    };
-  }),
+  return {
+    // 2. Начальные данные (будут перезаписаны, если loadData найдёт файл)
+    hosts: initialHosts,
+    groups: initialGroups,
+    knownHosts: initialKnownHosts,
+    logs: initialLogs,
+    keys: [],
+    forwardingRules: [],
+    snippets: [],
+    shellHistory: initialShellHistory,
+    tabs: [
+      { id: 'tab-vaults', type: 'vaults', label: 'Vaults' },
+      { id: 'tab-sftp', type: 'sftp', label: 'SFTP' },
+    ],
 
-  updateConnectionStatus: (tabId, status) => set((state) => ({
-    tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionStatus: status } : t)
-  })),
+    newTabOpen: false,
+    activePage: 'hosts',
+    activeTopTab: 'vaults',
+    selectedHostId: null,
+    selectedGroupId: null,
+    isPanelOpen: false,
+    panelMode: 'new',
+    searchQuery: '',
+    contextMenu: null,
+    panelMenuOpen: false,
+    pendingDeleteHostId: null,
+    knownHostsSort: 'newest',
+    knownHostsView: 'grid',
+    showInviteBanner: true,
+    selectedTags: [],
+    tagFilterOpen: false,
+    newHostMenuOpen: false,
+    selectedKeyId: null,
+    keyPanelOpen: false,
+    keyPanelMode: 'new',
+    keyMenuOpen: false,
+    selectedRuleId: null,
+    forwardingPanelOpen: false,
+    forwardingType: 'local',
+    forwardingMenuOpen: false,
+    selectedSnippetId: null,
+    snippetPanelOpen: false,
+    snippetMenuOpen: false,
+    showShellHistory: false,
+    activeTabId: 'tab-vaults',
 
-  addConnectionLog: (tabId, log) => set((state) => ({
-    tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionLog: [...(t.connectionLog || []), log] } : t)
-  })),
-}));
+    // 3. Реализация Actions с интеграцией сохранения
+    setActivePage: (page) => set({ activePage: page, isPanelOpen: false, selectedHostId: null, selectedGroupId: null, contextMenu: null }),
+    setActiveTopTab: (tab) => set({ activeTopTab: tab }),
+    setSelectedHost: (id) => set({ selectedHostId: id }),
+    setSelectedGroup: (id) => set({ selectedGroupId: id }),
+    setNewTabOpen: (open) => set({ newTabOpen: open }),
+    
+    openNewHostPanel: () => set({ isPanelOpen: true, panelMode: 'new', selectedHostId: null, panelMenuOpen: false }),
+    openHostDetails: (id) => set({ isPanelOpen: true, panelMode: 'details', selectedHostId: id, panelMenuOpen: false }),
+    closePanel: () => set({ isPanelOpen: false, selectedHostId: null, panelMenuOpen: false }),
+    
+    addHost: (host) => set((state) => {
+      const newHosts = [...state.hosts, host];
+      debouncedSave(newHosts, state.groups);
+      return { hosts: newHosts };
+    }),
+    
+    updateHost: (id, updates) => set((state) => {
+      const newHosts = state.hosts.map(h => h.id === id ? { ...h, ...updates } : h);
+      debouncedSave(newHosts, state.groups);
+      return { hosts: newHosts };
+    }),
+    
+    duplicateHost: (id) => set((state) => {
+      const host = state.hosts.find(h => h.id === id);
+      if (!host) return state;
+      const newHosts = [...state.hosts, { ...host, id: `h${Date.now()}`, label: `${host.label} copy`, createdAt: Date.now() }];
+      debouncedSave(newHosts, state.groups);
+      return { hosts: newHosts };
+    }),
+    
+    removeHost: (id) => set((state) => {
+      const newHosts = state.hosts.filter(h => h.id !== id);
+      debouncedSave(newHosts, state.groups);
+      return {
+        hosts: newHosts,
+        selectedHostId: state.selectedHostId === id ? null : state.selectedHostId,
+        isPanelOpen: state.selectedHostId === id ? false : state.isPanelOpen,
+      };
+    }),
+
+    addGroup: (group) => set((state) => {
+      const newGroups = [...state.groups, group];
+      debouncedSave(state.hosts, newGroups);
+      return { groups: newGroups };
+    }),
+    
+    setSearchQuery: (query) => set({ searchQuery: query }),
+    openContextMenu: (x, y, hostId) => set({ contextMenu: { x, y, hostId } }),
+    closeContextMenu: () => set({ contextMenu: null }),
+    togglePanelMenu: () => set((state) => ({ panelMenuOpen: !state.panelMenuOpen })),
+    closePanelMenu: () => set({ panelMenuOpen: false }),
+    openDeleteModal: (id) => set({ pendingDeleteHostId: id, panelMenuOpen: false, contextMenu: null }),
+    closeDeleteModal: () => set({ pendingDeleteHostId: null }),
+    setKnownHostsSort: (sort) => set({ knownHostsSort: sort }),
+    setKnownHostsView: (view) => set({ knownHostsView: view }),
+    setShowInviteBanner: (show) => set({ showInviteBanner: show }),
+    
+    toggleTag: (tag) => set((state) => {
+      const newTags = state.selectedTags.includes(tag) ? state.selectedTags.filter(t => t !== tag) : [...state.selectedTags, tag];
+      return { selectedTags: newTags };
+    }),
+    clearTags: () => set({ selectedTags: [] }),
+    setTagFilterOpen: (open) => set({ tagFilterOpen: open }),
+    setNewHostMenuOpen: (open) => set({ newHostMenuOpen: open }),
+
+    // Keys Actions
+    setSelectedKey: (id) => set({ selectedKeyId: id }),
+    setKeyPanelOpen: (open) => set({ keyPanelOpen: open }),
+    setKeyPanelMode: (mode) => set({ keyPanelMode: mode, keyPanelOpen: true }),
+    addKey: (key) => set((state) => ({ keys: [...state.keys, key] })),
+    updateKey: (id, updates) => set((state) => ({ keys: state.keys.map(k => k.id === id ? { ...k, ...updates } : k) })),
+    removeKey: (id) => set((state) => ({
+      keys: state.keys.filter(k => k.id !== id),
+      selectedKeyId: state.selectedKeyId === id ? null : state.selectedKeyId,
+      keyPanelOpen: state.selectedKeyId === id ? false : state.keyPanelOpen,
+    })),
+    setKeyMenuOpen: (open) => set({ keyMenuOpen: open }),
+
+    // Forwarding Actions
+    setSelectedRule: (id) => set({ selectedRuleId: id }),
+    setForwardingPanelOpen: (open) => set({ forwardingPanelOpen: open }),
+    setForwardingType: (type) => set({ forwardingType: type, forwardingPanelOpen: true }),
+    addForwardingRule: (rule) => set((state) => ({ forwardingRules: [...state.forwardingRules, rule] })),
+    removeForwardingRule: (id) => set((state) => ({
+      forwardingRules: state.forwardingRules.filter(r => r.id !== id),
+      selectedRuleId: state.selectedRuleId === id ? null : state.selectedRuleId,
+      forwardingPanelOpen: state.selectedRuleId === id ? false : state.forwardingPanelOpen,
+    })),
+    setForwardingMenuOpen: (open) => set({ forwardingMenuOpen: open }),
+
+    // Snippets Actions
+    setSelectedSnippet: (id) => set({ selectedSnippetId: id }),
+    setSnippetPanelOpen: (open) => set({ snippetPanelOpen: open }),
+    addSnippet: (snippet) => set((state) => ({ snippets: [...state.snippets, snippet] })),
+    updateSnippet: (id, updates) => set((state) => ({ snippets: state.snippets.map(s => s.id === id ? { ...s, ...updates } : s) })),
+    removeSnippet: (id) => set((state) => ({
+      snippets: state.snippets.filter(s => s.id !== id),
+      selectedSnippetId: state.selectedSnippetId === id ? null : state.selectedSnippetId,
+      snippetPanelOpen: state.selectedSnippetId === id ? false : state.snippetPanelOpen,
+    })),
+    setSnippetMenuOpen: (open) => set({ snippetMenuOpen: open }),
+    setShowShellHistory: (show) => set({ showShellHistory: show }),
+
+    // Tabs Actions
+    addConnectionTab: (hostId) => {
+      const host = get().hosts.find(h => h.id === hostId);
+      if (!host) return;
+      
+      const newTab: Tab = {
+        id: `tab-${Date.now()}`,
+        type: 'connection',
+        label: host.label,
+        hostId,
+        connectionStatus: 'connecting',
+        connectionLog: [],
+      };
+      
+      set((state) => ({
+        tabs: [...state.tabs, newTab],
+        activeTabId: newTab.id,
+      }));
+    },
+
+    setActiveTab: (tabId) => set({ activeTabId: tabId }),
+
+    closeTab: (tabId) => set((state) => {
+      const newTabs = state.tabs.filter(t => t.id !== tabId);
+      let newActiveTabId = state.activeTabId;
+      let newActiveTopTab = state.activeTopTab;
+
+      if (state.activeTabId === tabId) {
+        newActiveTabId = 'tab-vaults';
+        newActiveTopTab = 'vaults';
+      }
+
+      return { 
+        tabs: newTabs, 
+        activeTabId: newActiveTabId,
+        activeTopTab: newActiveTopTab
+      };
+    }),
+
+    updateConnectionStatus: (tabId, status) => set((state) => ({
+      tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionStatus: status } : t)
+    })),
+
+    addConnectionLog: (tabId, log) => set((state) => ({
+      tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionLog: [...(t.connectionLog || []), log] } : t)
+    })),
+  };
+});
