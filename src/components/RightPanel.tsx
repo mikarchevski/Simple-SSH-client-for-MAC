@@ -98,43 +98,89 @@ function PanelMenuItem({ label, danger, onClick }: { label: string; danger?: boo
 // Просто скопируй их из предыдущего RightPanel.tsx сюда
 
 function NewHostForm({ onSave }: { onSave: (host: any) => void }) {
-  const [form, setForm] = useState({ address: '', label: '', port: 22, username: '', password: '', tags: [] as string[] });
+  const [form, setForm] = useState({
+    address: '',
+    label: '',
+    port: 22,
+    username: '',
+    password: '',
+    tags: [] as string[],
+  });
+
   const handleSubmit = () => {
     if (!form.address) return;
-    onSave({ id: `h${Date.now()}`, ...form, os: 'generic' });
+    
+    // 1. Создаем новый хост
+    const newHost = {
+      id: `h${Date.now()}`,
+      ...form,
+      os: 'generic' as const,
+      createdAt: Date.now(),
+    };
+    
+    // 2. Сохраняем его в store
+    onSave(newHost);
+    
+    // 3. СРАЗУ открываем вкладку подключения к этому новому хосту!
+    useStore.getState().addConnectionTab(newHost.id);
   };
+
   return (
     <>
       <FormSection title="Address">
         <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
+          <div className="w-9 h-9 rounded bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
             <Server size={18} />
           </div>
-          <input type="text" value={form.address} onChange={(e) => setForm({...form, address: e.target.value})}
+          <input
+            type="text"
+            value={form.address}
+            onChange={(e) => setForm({...form, address: e.target.value})}
             className="flex-1 bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] placeholder-gray-500"
-            placeholder="IP or Hostname" />
+            placeholder="IP or Hostname"
+          />
         </div>
       </FormSection>
+
       <FormSection title="General">
-        <input type="text" value={form.label} onChange={(e) => setForm({...form, label: e.target.value})}
-          className="w-full bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] placeholder-gray-500 mb-3" placeholder="Label" />
+        <input
+          type="text"
+          value={form.label}
+          onChange={(e) => setForm({...form, label: e.target.value})}
+          className="w-full bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] placeholder-gray-500 mb-3"
+          placeholder="Label"
+        />
         <FormButton icon={<Folder size={14} />} label="Parent Group" />
         <FormButton icon={<Tag size={14} />} label="Tags" />
-        <FormButton icon={<HardDrive size={14} />} label="Backspace" rightLabel="Default" />
       </FormSection>
-      <button className="w-full bg-[#252535] border border-[#333] rounded-lg p-4 text-gray-400 hover:text-gray-200 hover:border-[#444] transition-colors flex items-center justify-center space-x-2">
-        <Users size={16} /><span className="text-sm">Share this host</span>
-      </button>
+
       <FormSection title="SSH">
         <div className="flex items-center space-x-2 text-sm text-gray-300">
           <span>on</span>
-          <input type="number" value={form.port} onChange={(e) => setForm({...form, port: parseInt(e.target.value) || 22})}
-            className="w-16 bg-[#1e1e2e] text-gray-200 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]" />
+          <input
+            type="number"
+            value={form.port}
+            onChange={(e) => setForm({...form, port: parseInt(e.target.value) || 22})}
+            className="w-16 bg-[#1e1e2e] text-gray-200 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]"
+          />
           <span>port</span>
         </div>
       </FormSection>
+
       <CredentialsSection form={form} setForm={setForm} />
+
       <AdvancedOptions />
+      
+      {/* Кнопка, которая теперь сохраняет И подключается */}
+      <div className="pt-4">
+        <button 
+          onClick={handleSubmit}
+          disabled={!form.address}
+          className="w-full bg-[#007AFF] hover:bg-[#0062cc] disabled:bg-[#3a3a4a] disabled:cursor-not-allowed text-white py-2.5 rounded-md text-sm font-medium transition-colors"
+        >
+          Connect
+        </button>
+      </div>
     </>
   );
 }

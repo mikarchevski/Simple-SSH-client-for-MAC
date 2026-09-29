@@ -1,6 +1,15 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod ssh;
+
 fn main() {
-    my_ssh_lib::run()
+    tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            ssh::ssh_connect,
+            ssh::ssh_send,
+            ssh::ssh_resize
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

@@ -383,12 +383,24 @@ export const useStore = create<AppState>((set, get) => ({
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
 
-  closeTab: (tabId) => set((state) => {
+      closeTab: (tabId) => set((state) => {
     const newTabs = state.tabs.filter(t => t.id !== tabId);
-    const newActiveTabId = state.activeTabId === tabId 
-      ? (newTabs.length > 0 ? newTabs[newTabs.length - 1].id : 'tab-vaults')
-      : state.activeTabId;
-    return { tabs: newTabs, activeTabId: newActiveTabId };
+    
+    let newActiveTabId = state.activeTabId;
+    let newActiveTopTab = state.activeTopTab;
+
+    // Если мы закрыли именно ту вкладку, которая была активна
+    if (state.activeTabId === tabId) {
+      // ВСЕГДА возвращаемся на Vaults при закрытии вкладки подключения
+      newActiveTabId = 'tab-vaults';
+      newActiveTopTab = 'vaults';
+    }
+
+    return { 
+      tabs: newTabs, 
+      activeTabId: newActiveTabId,
+      activeTopTab: newActiveTopTab
+    };
   }),
 
   updateConnectionStatus: (tabId, status) => set((state) => ({
