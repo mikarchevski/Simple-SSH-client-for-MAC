@@ -2,6 +2,7 @@ import { Server, Folder, Pencil, ChevronRight, Users, X, Tag, ChevronDown } from
 import { useStore } from '../store';
 import { TagFilter } from './TagFilter';
 
+
 export function HostGrid() {
   const { 
     hosts, groups, searchQuery, openNewHostPanel, openHostDetails, 
