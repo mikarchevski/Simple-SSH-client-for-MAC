@@ -1,6 +1,6 @@
 import { Server, Folder, Pencil, ChevronRight, Users, X, Tag, ChevronDown } from 'lucide-react';
 import { useStore } from '../store';
-import { TagFilter } from './TagFilter';
+import { TagFilter } from './TagFilter'; //test
 
 export function HostGrid() {
   const { 
