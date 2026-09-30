@@ -11,6 +11,30 @@ export function RightPanel() {
   const selectedHost = hosts.find(h => h.id === selectedHostId);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // ✅ 1. Поднимаем состояние формы нового хоста сюда, чтобы контролировать валидацию нижней кнопки
+  const [newHostForm, setNewHostForm] = useState({
+    address: '',
+    label: '',
+    port: 22,
+    username: '',
+    password: '',
+    tags: [] as string[],
+  });
+
+  // Сброс формы при открытии режима создания нового хоста
+  useEffect(() => {
+    if (panelMode === 'new') {
+      setNewHostForm({
+        address: '',
+        label: '',
+        port: 22,
+        username: '',
+        password: '',
+        tags: [],
+      });
+    }
+  }, [panelMode]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -22,6 +46,9 @@ export function RightPanel() {
   }, [panelMenuOpen, closePanelMenu]);
 
   if (!isPanelOpen) return null;
+
+  // ✅ 2. Логика валидации: кнопка активна только если заполнены Host IP (address) и Label
+  const isNewHostFormValid = newHostForm.address.trim() !== '' && newHostForm.label.trim() !== '';
 
   return (
     <>
@@ -48,21 +75,34 @@ export function RightPanel() {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {panelMode === 'new' ? (
-            <NewHostForm onSave={(host) => { addHost(host); closePanel(); }} />
+            // ✅ 3. Передаем состояние формы вниз как пропсы
+            <NewHostForm form={newHostForm} setForm={setNewHostForm} />
           ) : selectedHost ? (
             <HostDetailsForm host={selectedHost} onSave={(updates) => updateHost(selectedHost.id, updates)} />
           ) : null}
         </div>
 
+        {/* ✅ 4. Нижняя кнопка теперь универсальна и реактивна (disabled) */}
         <div className="p-4 border-t border-[#2a3a4a]">
           <button 
             onClick={() => {
-              if (selectedHostId) {
+              if (panelMode === 'new') {
+                const newHost = {
+                  id: `h${Date.now()}`,
+                  ...newHostForm,
+                  os: 'generic' as const,
+                  createdAt: Date.now(),
+                };
+                addHost(newHost);
+                useStore.getState().addConnectionTab(newHost.id);
+                closePanel();
+              } else if (selectedHostId) {
                 useStore.getState().addConnectionTab(selectedHostId);
                 closePanel();
               }
             }}
-            className="w-full bg-[#007AFF] hover:bg-[#0062cc] text-white py-2.5 rounded-md text-sm font-medium transition-colors"
+            disabled={panelMode === 'new' && !isNewHostFormValid}
+            className="w-full bg-[#007AFF] hover:bg-[#0062cc] disabled:bg-[#3a3a4a] disabled:cursor-not-allowed text-white py-2.5 rounded-md text-sm font-medium transition-colors"
           >
             Connect
           </button>
@@ -74,6 +114,7 @@ export function RightPanel() {
 
 // --- КОМПОНЕНТЫ ФОРМЫ ---
 
+// ... (компоненты TagInput и GroupSelector остаются без изменений) ...
 function TagInput({ tags = [], onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
   const [inputValue, setInputValue] = useState('');
 
@@ -118,8 +159,6 @@ function GroupSelector({ groupId, groups, onChange }: { groupId?: string; groups
   const [newGroupName, setNewGroupName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  // Получаем функцию добавления группы из store
   const addGroup = useStore((state) => state.addGroup);
 
   useEffect(() => {
@@ -138,17 +177,9 @@ function GroupSelector({ groupId, groups, onChange }: { groupId?: string; groups
   const handleCreateGroup = () => {
     if (newGroupName.trim()) {
       const newGroupId = `g${Date.now()}`;
-      const newGroup = {
-        id: newGroupId,
-        name: newGroupName.trim(),
-        count: 1
-      };
-      
-      // 1. Сохраняем группу в глобальный store
+      const newGroup = { id: newGroupId, name: newGroupName.trim(), count: 1 };
       addGroup(newGroup);
-      // 2. Привязываем текущий хост к этой новой группе
       onChange(newGroupId);
-      
       setNewGroupName('');
       setIsCreating(false);
       setIsOpen(false);
@@ -170,37 +201,26 @@ function GroupSelector({ groupId, groups, onChange }: { groupId?: string; groups
 
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-[#252535] border border-[#3a3a4a] rounded-lg shadow-2xl py-1.5 z-50 min-w-[200px]">
-          <button
-            onClick={() => { onChange(undefined); setIsOpen(false); }}
-            className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors text-gray-400"
-          >
+          <button onClick={() => { onChange(undefined); setIsOpen(false); }} className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors text-gray-400">
             No group
           </button>
-          
           {groups.map(group => (
             <button
               key={group.id}
               onClick={() => { onChange(group.id); setIsOpen(false); }}
-              className={`w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors ${
-                groupId === group.id ? 'text-blue-400' : 'text-gray-200'
-              }`}
+              className={`w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors ${groupId === group.id ? 'text-blue-400' : 'text-gray-200'}`}
             >
               {group.name}
             </button>
           ))}
-
           <div className="my-1 border-t border-[#3a3a4a]" />
-
           {isCreating ? (
             <div className="px-3 py-2">
               <input
                 type="text"
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreateGroup();
-                  if (e.key === 'Escape') setIsCreating(false);
-                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateGroup(); if (e.key === 'Escape') setIsCreating(false); }}
                 placeholder="Group name..."
                 className="w-full bg-[#1e1e2e] text-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]"
                 autoFocus
@@ -211,12 +231,8 @@ function GroupSelector({ groupId, groups, onChange }: { groupId?: string; groups
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => setIsCreating(true)}
-              className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors text-blue-400 flex items-center space-x-2"
-            >
-              <Plus size={12} />
-              <span>Create new group</span>
+            <button onClick={() => setIsCreating(true)} className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors text-blue-400 flex items-center space-x-2">
+              <Plus size={12} /><span>Create new group</span>
             </button>
           )}
         </div>
@@ -226,7 +242,6 @@ function GroupSelector({ groupId, groups, onChange }: { groupId?: string; groups
 }
 
 function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) => void }) {
-  // ✅ FIX: Добавляем || [] на случай, если tags undefined у старых хостов
   const [form, setForm] = useState({ 
     address: host.address, 
     label: host.label, 
@@ -239,11 +254,8 @@ function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) =
 
   const groups = useStore((state) => state.groups);
 
-  // Автосохранение при изменении формы
   useEffect(() => {
-    const timer = setTimeout(() => {
-      onSave(form);
-    }, 500);
+    const timer = setTimeout(() => { onSave(form); }, 500);
     return () => clearTimeout(timer);
   }, [form, onSave]);
 
@@ -261,24 +273,14 @@ function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) =
       <FormSection title="General">
         <input type="text" value={form.label} onChange={(e) => setForm({...form, label: e.target.value})}
           className="w-full bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] mb-3" placeholder="Label" />
-        
         <div className="mb-3">
           <label className="text-xs text-gray-500 mb-1 block">Group</label>
-          <GroupSelector
-            groupId={form.groupId}
-            groups={groups}
-            onChange={(newGroupId) => setForm({...form, groupId: newGroupId})}
-          />
+          <GroupSelector groupId={form.groupId} groups={groups} onChange={(newGroupId) => setForm({...form, groupId: newGroupId})} />
         </div>
-
         <div className="mt-3">
           <label className="text-xs text-gray-500 mb-1 block">Tags</label>
-          <TagInput 
-            tags={form.tags} 
-            onChange={(newTags) => setForm({...form, tags: newTags})} 
-          />
+          <TagInput tags={form.tags} onChange={(newTags) => setForm({...form, tags: newTags})} />
         </div>
-
         <FormButton icon={<HardDrive size={14} />} label="Backspace" rightLabel="Default" />
       </FormSection>
       <button className="w-full bg-[#252535] border border-[#333] rounded-lg p-4 text-blue-400 hover:bg-[#2a2a3a] transition-colors flex items-center justify-center space-x-2">
@@ -298,28 +300,8 @@ function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) =
   );
 }
 
-function NewHostForm({ onSave }: { onSave: (host: any) => void }) {
-  const [form, setForm] = useState({
-    address: '',
-    label: '',
-    port: 22,
-    username: '',
-    password: '',
-    tags: [] as string[],
-  });
-
-  const handleSubmit = () => {
-    if (!form.address) return;
-    const newHost = {
-      id: `h${Date.now()}`,
-      ...form,
-      os: 'generic' as const,
-      createdAt: Date.now(),
-    };
-    onSave(newHost);
-    useStore.getState().addConnectionTab(newHost.id);
-  };
-
+// ✅ 5. NewHostForm теперь "глупый" компонент, который просто принимает form и setForm
+function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
   return (
     <>
       <FormSection title="Address">
@@ -361,20 +343,12 @@ function NewHostForm({ onSave }: { onSave: (host: any) => void }) {
       </FormSection>
       <CredentialsSection form={form} setForm={setForm} />
       <AdvancedOptions />
-      <div className="pt-4">
-        <button 
-          onClick={handleSubmit}
-          disabled={!form.address}
-          className="w-full bg-[#007AFF] hover:bg-[#0062cc] disabled:bg-[#3a3a4a] disabled:cursor-not-allowed text-white py-2.5 rounded-md text-sm font-medium transition-colors"
-        >
-          Connect
-        </button>
-      </div>
+      {/* ✅ 6. Верхняя кнопка Connect отсюда удалена */}
     </>
   );
 }
 
-// --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
+// --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ (без изменений) ---
 
 function PanelHeader({ mode, onClose }: { mode: 'new' | 'details'; onClose: () => void }) {
   const { panelMenuOpen, togglePanelMenu } = useStore();
@@ -402,9 +376,7 @@ function PanelMenuItem({ label, danger, onClick }: { label: string; danger?: boo
   return (
     <button 
       onClick={onClick}
-      className={`w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors ${
-        danger ? 'text-red-400 hover:text-red-300' : 'text-gray-200'
-      }`}
+      className={`w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors ${danger ? 'text-red-400 hover:text-red-300' : 'text-gray-200'}`}
     >
       {label}
     </button>
