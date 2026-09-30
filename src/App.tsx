@@ -54,7 +54,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[#1e1e2e] text-gray-300 font-sans overflow-hidden">
-      <Sidebar />
+      {activeTab?.type !== 'connection' && <Sidebar />}
       
       <main className="flex-1 flex flex-col min-w-0">
         {/* === ВЕРХНЯЯ ПАНЕЛЬ ВКЛАДОК (ТЕПЕРЬ С ДИНАМИЧЕСКИМИ ВКЛАДКАМИ) === */}
