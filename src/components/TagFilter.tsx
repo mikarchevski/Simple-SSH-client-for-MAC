@@ -3,11 +3,11 @@ import { useStore } from '../store';
 import { Search, X, Pencil, Trash2, Tag } from 'lucide-react';
 
 export function TagFilter() {
-  const { selectedTags, setSelectedTags, tagFilterOpen, setTagFilterOpen, hosts, updateHost } = useStore();
+  const { selectedTags, toggleTag, clearTags, tagFilterOpen, setTagFilterOpen, hosts, updateHost } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingTag, setEditingTag] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null); // ✅ Общий контейнер для кнопки и меню
+  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const allTags = Array.from(new Set(hosts.flatMap(h => h.tags || [])));
@@ -23,7 +23,6 @@ export function TagFilter() {
     }
   }, [editingTag]);
 
-  // ✅ Закрытие по клику вне контейнера
   useEffect(() => {
     if (!tagFilterOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -36,14 +35,6 @@ export function TagFilter() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [tagFilterOpen, setTagFilterOpen]);
-
-  const toggleTag = (tag: string) => {
-    if (selectedTags.includes(tag)) {
-      setSelectedTags(selectedTags.filter(t => t !== tag));
-    } else {
-      setSelectedTags([...selectedTags, tag]);
-    }
-  };
 
   const startEditing = (tag: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -67,10 +58,6 @@ export function TagFilter() {
       updateHost(host.id, { tags: host.tags });
     });
 
-    if (selectedTags.includes(oldTag)) {
-      setSelectedTags(selectedTags.map(t => t === oldTag ? editValue.trim() : t));
-    }
-
     setEditingTag(null);
   };
 
@@ -87,19 +74,17 @@ export function TagFilter() {
     });
 
     if (selectedTags.includes(tagToDelete)) {
-      setSelectedTags(selectedTags.filter(t => t !== tagToDelete));
+      toggleTag(tagToDelete);
     }
   };
 
   return (
     <div 
-      ref={containerRef} // ✅ Общий контейнер
+      ref={containerRef}
       className="relative"
     >
-      {/* Кнопка тега */}
       <button 
         onClick={() => {
-          // ✅ Если меню открыто - закрываем, иначе открываем
           setTagFilterOpen(!tagFilterOpen);
           if (tagFilterOpen) {
             setSearchQuery('');
@@ -111,10 +96,8 @@ export function TagFilter() {
         <Tag size={16} />
       </button>
 
-      {/* Выпадающее меню */}
       {tagFilterOpen && (
         <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-[#252535] border border-[#3a3a4a] rounded-lg shadow-2xl py-2 w-[180px] z-50">
-          {/* Поиск */}
           <div className="px-2 mb-2">
             <div className="relative">
               <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -129,7 +112,6 @@ export function TagFilter() {
             </div>
           </div>
 
-          {/* Список тегов */}
           <div className="max-h-[250px] overflow-y-auto">
             {filteredTags.map(tag => (
               <div
@@ -203,7 +185,7 @@ export function TagFilter() {
           {selectedTags.length > 0 && (
             <div className="mt-1 pt-1 border-t border-[#3a3a4a] px-2">
               <button
-                onClick={() => setSelectedTags([])}
+                onClick={() => clearTags()}
                 className="w-full text-[10px] text-gray-400 hover:text-gray-200 flex items-center justify-center space-x-1 py-1"
               >
                 <X size={10} />

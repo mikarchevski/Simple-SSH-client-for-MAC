@@ -123,7 +123,6 @@ interface AppState {
   panelMenuOpen: boolean;
   pendingDeleteHostId: string | null;
   knownHostsSort: SortOrder;
-  viewMode: 'grid', 
   knownHostsView: ViewMode;
   viewMode: 'grid' | 'list';
   showInviteBanner: boolean;
@@ -147,6 +146,8 @@ interface AppState {
   // Actions (Hosts & General)
   setActivePage: (page: Page) => void;
   setActiveTopTab: (tab: TopTab) => void;
+  setViewMode: (mode: 'grid' | 'list') => void; // ✅ ИСПРАВЛЕНО: только тип
+  setSelectedTags: (tags: string[]) => void; // ✅ ИСПРАВЛЕНО: только тип
   setSelectedHost: (id: string | null) => void;
   setSelectedGroup: (id: string | null) => void;
   setNewTabOpen: (open: boolean) => void;
@@ -173,7 +174,6 @@ interface AppState {
   setNewHostMenuOpen: (open: boolean) => void;
   addGroup: (group: Group) => void;
   
-
   // Actions (Keys)
   setSelectedKey: (id: string | null) => void;
   setKeyPanelOpen: (open: boolean) => void;
@@ -239,7 +239,6 @@ const initialShellHistory: ShellHistoryEntry[] = [
   { id: 'sh4', command: 'sudo apt-get install -y kubelet kubeadm kubectl', executedAt: Date.now() - 70000 },
 ];
 
-// Debounce-функция: сохраняет данные на диск через 500мс после последнего изменения
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 function debouncedSave(hosts: Host[], groups: Group[]) {
   if (saveTimeout) clearTimeout(saveTimeout);
@@ -249,7 +248,6 @@ function debouncedSave(hosts: Host[], groups: Group[]) {
 }
 
 export const useStore = create<AppState>((set, get) => {
-  // 1. Асинхронная загрузка данных при инициализации store
   loadData().then((persisted) => {
     if (persisted) {
       set({ hosts: persisted.hosts, groups: persisted.groups });
@@ -257,7 +255,6 @@ export const useStore = create<AppState>((set, get) => {
   });
 
   return {
-    // 2. Начальные данные (будут перезаписаны, если loadData найдёт файл)
     hosts: initialHosts,
     groups: initialGroups,
     knownHosts: initialKnownHosts,
@@ -284,6 +281,7 @@ export const useStore = create<AppState>((set, get) => {
     pendingDeleteHostId: null,
     knownHostsSort: 'newest',
     knownHostsView: 'grid',
+    viewMode: 'grid',
     showInviteBanner: true,
     selectedTags: [],
     tagFilterOpen: false,
@@ -302,13 +300,16 @@ export const useStore = create<AppState>((set, get) => {
     showShellHistory: false,
     activeTabId: 'tab-vaults',
 
-    // 3. Реализация Actions с интеграцией сохранения
+    // Actions
     setActivePage: (page) => set({ activePage: page, isPanelOpen: false, selectedHostId: null, selectedGroupId: null, contextMenu: null }),
     setActiveTopTab: (tab) => set({ activeTopTab: tab }),
     setSelectedHost: (id) => set({ selectedHostId: id }),
     setSelectedGroup: (id) => set({ selectedGroupId: id }),
     setNewTabOpen: (open) => set({ newTabOpen: open }),
+    
+    // ✅ ИСПРАВЛЕНО: правильная реализация внутри return
     setViewMode: (mode: 'grid' | 'list') => set({ viewMode: mode }),
+    setSelectedTags: (tags: string[]) => set({ selectedTags: tags }),
     
     openNewHostPanel: () => set({ isPanelOpen: true, panelMode: 'new', selectedHostId: null, panelMenuOpen: false }),
     openHostDetails: (id) => set({ isPanelOpen: true, panelMode: 'details', selectedHostId: id, panelMenuOpen: false }),
@@ -449,8 +450,6 @@ export const useStore = create<AppState>((set, get) => {
     updateConnectionStatus: (tabId, status) => set((state) => ({
       tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionStatus: status } : t)
     })),
-
-    
 
     addConnectionLog: (tabId, log) => set((state) => ({
       tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionLog: [...(t.connectionLog || []), log] } : t)

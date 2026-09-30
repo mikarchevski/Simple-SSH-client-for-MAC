@@ -115,12 +115,14 @@ export function HostGrid() {
                 )}
 
                 {filteredHosts.map(host => (
-                    <HostCard 
+                  <HostCard 
                     key={host.id} 
                     host={host} 
                     onClick={() => setSelectedHost(host.id)} 
-                    onContextMenu={(e) => openContextMenu(e.clientX, e.clientY, host.id)}
-                    />
+                    onContextMenu={(e: React.MouseEvent, hostId: string) => {
+                      openContextMenu(e.clientX, e.clientY, hostId);
+                    }}
+                  />
                 ))}
                 </div>
             ) : (
@@ -131,7 +133,7 @@ export function HostGrid() {
                     key={host.id} 
                     host={host} 
                     onClick={() => setSelectedHost(host.id)} 
-                    onContextMenu={(e) => openContextMenu(e.clientX, e.clientY, host.id)}
+                    onContextMenu={(e: React.MouseEvent) => openContextMenu(e.clientX, e.clientY, host.id)}
                     />
                 ))}
                 </div>
@@ -155,14 +157,13 @@ const handleContextMenu = (e: React.MouseEvent, hostId: string) => {
   e.preventDefault();
   e.stopPropagation();
   
-  useStore.getState().openContextMenu(hostId);
-  
-  // Отправляем координаты через кастомное событие
-  window.dispatchEvent(
-    new CustomEvent('contextmenu-open', { detail: { x: e.clientX, y: e.clientY } })
-  );
+  useStore.getState().openContextMenu(e.clientX, e.clientY, hostId);
 };
-function HostCard({ host, onClick, onContextMenu }: any) {
+function HostCard({ host, onClick, onContextMenu }: { 
+  host: any; 
+  onClick: () => void; 
+  onContextMenu: (e: React.MouseEvent, hostId: string) => void;
+}) {
   const selectedHostId = useStore((state) => state.selectedHostId);
   const isSelected = selectedHostId === host.id;
   
@@ -176,10 +177,13 @@ function HostCard({ host, onClick, onContextMenu }: any) {
 
   return (
     <div 
-    data-host-id={host.id}
+      data-host-id={host.id}
       onClick={onClick}
-      onDoubleClick={handleDoubleClick}  // <-- ДОБАВЛЕНО
-      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e); }}
+      onDoubleClick={handleDoubleClick}
+      onContextMenu={(e: React.MouseEvent) => {
+        e.preventDefault();
+        onContextMenu(e, host.id);
+      }}
       className={`bg-[#252535] border rounded-lg p-4 cursor-pointer transition-all duration-200 group relative ${
         isSelected 
           ? 'border-blue-500 bg-blue-500/5' 
@@ -210,7 +214,6 @@ function HostCard({ host, onClick, onContextMenu }: any) {
     </div>
   );
 }
-
 function HostListItem({ host, onClick, onContextMenu }: any) {
   const selectedHostId = useStore((state) => state.selectedHostId);
   const isSelected = selectedHostId === host.id;
@@ -227,8 +230,10 @@ function HostListItem({ host, onClick, onContextMenu }: any) {
     <div 
       onClick={onClick}
       onDoubleClick={handleDoubleClick}
-      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e); }}
-      className={`bg-[#252535] border rounded-lg p-3 cursor-pointer transition-all duration-200 group flex items-center space-x-4 ${
+        onContextMenu={(e: React.MouseEvent) => { 
+          e.preventDefault(); 
+          onContextMenu(e, host.id); 
+        }}      className={`bg-[#252535] border rounded-lg p-3 cursor-pointer transition-all duration-200 group flex items-center space-x-4 ${
         isSelected 
           ? 'border-blue-500 bg-blue-500/5' 
           : 'border-[#333] hover:border-[#4a4a5a] hover:bg-[#2a2a3a]'
