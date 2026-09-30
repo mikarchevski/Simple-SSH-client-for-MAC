@@ -146,7 +146,7 @@ export function HostGrid() {
             </section>
 
       {/* Фильтр по тегам */}
-      <TagFilter />
+      
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { NewTabOverlay } from './components/NewTabOverlay';
 import { ConnectionPage } from './components/ConnectionPage';
 import { useStore } from './store';
 import { ViewModeMenu } from './components/ViewModeMenu';
+import { TagFilter } from './components/TagFilter';
 
 function App() {
   const { 
@@ -27,6 +28,7 @@ function App() {
 
   const newHostMenuRef = useRef<HTMLDivElement>(null);
   const activeTab = tabs.find(t => t.id === activeTabId);
+  const tagButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -177,17 +179,12 @@ function App() {
 
                   <div className="flex-1" />
 
-                  <div className="flex items-center space-x-2">
-                    <button className="p-1.5 text-gray-400 hover:text-white transition-colors">
-                      
-                      <ViewModeMenu />
-                    </button>
-                    <button 
-                      onClick={() => setTagFilterOpen(!tagFilterOpen)}
-                      className={`p-1.5 transition-colors ${selectedTags.length > 0 ? 'text-blue-400' : 'text-gray-400 hover:text-white'}`}
-                    >
-                      <Tag size={16} />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                    {/* ✅ Убрали лишнюю кнопку-обертку вокруг ViewModeMenu (было невалидно) */}
+                    <ViewModeMenu />
+                    
+                    <TagFilter />
+
                     <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-semibold">
                       M
                     </div>

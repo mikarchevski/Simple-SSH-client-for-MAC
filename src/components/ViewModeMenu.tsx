@@ -28,7 +28,7 @@ export function ViewModeMenu() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 bg-[#252535] border border-[#3a3a4a] rounded-lg shadow-2xl py-1.5 min-w-[140px] z-50">
+        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-[#252535] border border-[#3a3a4a] rounded-lg shadow-2xl py-1.5 min-w-[140px] z-50">
           <button
             onClick={() => { setViewMode('grid'); setIsOpen(false); }}
             className={`w-full px-3 py-2 text-sm text-left flex items-center justify-between transition-colors hover:bg-[#3a3a4a] ${

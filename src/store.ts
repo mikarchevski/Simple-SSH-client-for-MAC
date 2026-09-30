@@ -123,6 +123,7 @@ interface AppState {
   panelMenuOpen: boolean;
   pendingDeleteHostId: string | null;
   knownHostsSort: SortOrder;
+  viewMode: 'grid', 
   knownHostsView: ViewMode;
   viewMode: 'grid' | 'list';
   showInviteBanner: boolean;
