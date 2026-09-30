@@ -20,6 +20,9 @@ export function HostGrid() {
     return matchesSearch && matchesGroup && matchesTags;
   });
 
+  const { viewMode } = useStore();
+
+
   const selectedGroup = groups.find(g => g.id === selectedGroupId);
 
   return (
@@ -88,44 +91,59 @@ export function HostGrid() {
       )}
 
       {/* Хосты */}
-      <section>
-        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">Hosts</h2>
-        <div className={`grid gap-3 ${selectedGroupId ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'}`}>
-          
-          {!selectedGroupId && (
-            <div 
-              onClick={openNewHostPanel}
-              className="bg-[#252535] border-2 border-dashed border-blue-500/30 rounded-lg p-4 hover:border-blue-500/60 hover:bg-[#2a2a3a] cursor-pointer transition-all"
-            >
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
-                  <Server size={18} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-400">Enter IP or Hostname...</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">ssh</p>
-                </div>
-              </div>
-            </div>
-          )}
+        <section>
+            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">Hosts</h2>
+            
+            {viewMode === 'grid' ? (
+                // GRID РЕЖИМ
+                <div className={`grid gap-3 ${selectedGroupId ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'}`}>
+                {!selectedGroupId && (
+                    <div 
+                    onClick={openNewHostPanel}
+                    className="bg-[#252535] border-2 border-dashed border-blue-500/30 rounded-lg p-4 hover:border-blue-500/60 hover:bg-[#2a2a3a] cursor-pointer transition-all"
+                    >
+                    <div className="flex items-center space-x-3">
+                        <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                        <Server size={18} />
+                        </div>
+                        <div>
+                        <h3 className="text-sm font-semibold text-gray-400">Enter IP or Hostname...</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">ssh</p>
+                        </div>
+                    </div>
+                    </div>
+                )}
 
-          {filteredHosts.map(host => (
-            <HostCard 
-              key={host.id} 
-              host={host} 
-              onClick={() => setSelectedHost(host.id)} 
-              onContextMenu={(e) => openContextMenu(e.clientX, e.clientY, host.id)}
-            />
-          ))}
-        </div>
+                {filteredHosts.map(host => (
+                    <HostCard 
+                    key={host.id} 
+                    host={host} 
+                    onClick={() => setSelectedHost(host.id)} 
+                    onContextMenu={(e) => openContextMenu(e.clientX, e.clientY, host.id)}
+                    />
+                ))}
+                </div>
+            ) : (
+                // LIST РЕЖИМ
+                <div className="space-y-2">
+                {filteredHosts.map(host => (
+                    <HostListItem 
+                    key={host.id} 
+                    host={host} 
+                    onClick={() => setSelectedHost(host.id)} 
+                    onContextMenu={(e) => openContextMenu(e.clientX, e.clientY, host.id)}
+                    />
+                ))}
+                </div>
+            )}
 
-        {filteredHosts.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            <Server size={48} className="mx-auto mb-3 opacity-20" />
-            <p>No hosts found</p>
-          </div>
-        )}
-      </section>
+            {filteredHosts.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                <Server size={48} className="mx-auto mb-3 opacity-20" />
+                <p>No hosts found</p>
+                </div>
+            )}
+            </section>
 
       {/* Фильтр по тегам */}
       <TagFilter />
@@ -185,6 +203,51 @@ function HostCard({ host, onClick, onContextMenu }: any) {
             useStore.getState().openHostDetails(host.id);
           }}
           className="p-1 text-gray-400 hover:text-white bg-[#1e1e2e] rounded"
+        >
+          <Pencil size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HostListItem({ host, onClick, onContextMenu }: any) {
+  const selectedHostId = useStore((state) => state.selectedHostId);
+  const isSelected = selectedHostId === host.id;
+  
+  const osColor = host.os === 'ubuntu' 
+    ? 'text-orange-400 bg-orange-500/10' 
+    : 'text-blue-400 bg-blue-500/10';
+
+  const handleDoubleClick = () => {
+    useStore.getState().addConnectionTab(host.id);
+  };
+
+  return (
+    <div 
+      onClick={onClick}
+      onDoubleClick={handleDoubleClick}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e); }}
+      className={`bg-[#252535] border rounded-lg p-3 cursor-pointer transition-all duration-200 group flex items-center space-x-4 ${
+        isSelected 
+          ? 'border-blue-500 bg-blue-500/5' 
+          : 'border-[#333] hover:border-[#4a4a5a] hover:bg-[#2a2a3a]'
+      }`}
+    >
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${osColor}`}>
+        <Server size={20} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-semibold text-gray-100 truncate">{host.label}</h3>
+        <p className="text-xs text-gray-500 truncate">{host.address} • {host.tags.join(', ')}</p>
+      </div>
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            useStore.getState().openHostDetails(host.id);
+          }}
+          className="p-1.5 text-gray-400 hover:text-white bg-[#1e1e2e] rounded"
         >
           <Pencil size={12} />
         </button>

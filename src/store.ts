@@ -124,6 +124,7 @@ interface AppState {
   pendingDeleteHostId: string | null;
   knownHostsSort: SortOrder;
   knownHostsView: ViewMode;
+  viewMode: 'grid' | 'list';
   showInviteBanner: boolean;
   selectedTags: string[];
   tagFilterOpen: boolean;
@@ -170,6 +171,7 @@ interface AppState {
   setTagFilterOpen: (open: boolean) => void;
   setNewHostMenuOpen: (open: boolean) => void;
   addGroup: (group: Group) => void;
+  
 
   // Actions (Keys)
   setSelectedKey: (id: string | null) => void;
@@ -305,6 +307,7 @@ export const useStore = create<AppState>((set, get) => {
     setSelectedHost: (id) => set({ selectedHostId: id }),
     setSelectedGroup: (id) => set({ selectedGroupId: id }),
     setNewTabOpen: (open) => set({ newTabOpen: open }),
+    setViewMode: (mode: 'grid' | 'list') => set({ viewMode: mode }),
     
     openNewHostPanel: () => set({ isPanelOpen: true, panelMode: 'new', selectedHostId: null, panelMenuOpen: false }),
     openHostDetails: (id) => set({ isPanelOpen: true, panelMode: 'details', selectedHostId: id, panelMenuOpen: false }),

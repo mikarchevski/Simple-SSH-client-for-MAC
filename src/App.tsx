@@ -15,6 +15,7 @@ import { SnippetsPage } from './components/SnippetsPage';
 import { NewTabOverlay } from './components/NewTabOverlay';
 import { ConnectionPage } from './components/ConnectionPage';
 import { useStore } from './store';
+import { ViewModeMenu } from './components/ViewModeMenu';
 
 function App() {
   const { 
@@ -178,16 +179,14 @@ function App() {
 
                   <div className="flex items-center space-x-2">
                     <button className="p-1.5 text-gray-400 hover:text-white transition-colors">
-                      <Grid3X3 size={16} />
+                      
+                      <ViewModeMenu />
                     </button>
                     <button 
                       onClick={() => setTagFilterOpen(!tagFilterOpen)}
                       className={`p-1.5 transition-colors ${selectedTags.length > 0 ? 'text-blue-400' : 'text-gray-400 hover:text-white'}`}
                     >
                       <Tag size={16} />
-                    </button>
-                    <button className="p-1.5 text-gray-400 hover:text-white transition-colors">
-                      <List size={16} />
                     </button>
                     <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-semibold">
                       M
