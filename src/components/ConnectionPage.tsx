@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Terminal } from './Terminal';
+import { HostMetricsWidget } from './HostMetricsWidget';
 
 export function ConnectionPage({ tabId }: { tabId: string }) {
   const { tabs, updateConnectionStatus, addConnectionLog, openHostDetails, closeTab } = useStore();
@@ -20,17 +21,17 @@ export function ConnectionPage({ tabId }: { tabId: string }) {
       
       try {
         await invoke('ssh_connect', {
-    creds: {
-      session_id: tabId,
-      host: host.address,
-      port: host.port,
-      username: host.username,
-      password: host.password,
-    },
-  });
+          creds: {
+            session_id: tabId,
+            host: host.address,
+            port: host.port,
+            username: host.username,
+            password: host.password,
+          },
+        });
 
-  addConnectionLog(tabId, `✅ Connected successfully to ${host.address}`);
-  updateConnectionStatus(tabId, 'connected');
+        addConnectionLog(tabId, `✅ Connected successfully to ${host.address}`);
+        updateConnectionStatus(tabId, 'connected');
       } catch (error) {
         addConnectionLog(tabId, `❌ Connection failed: ${error}`);
         updateConnectionStatus(tabId, 'failed');
@@ -48,7 +49,7 @@ export function ConnectionPage({ tabId }: { tabId: string }) {
     return () => {
       unlistenClosed.then(fn => fn());
     };
-  }, [tabId, host]);
+  }, [tabId, host, tab]);
 
   if (!tab || !host) {
     return <div className="flex-1 flex items-center justify-center text-gray-500">Host not found</div>;
@@ -58,11 +59,18 @@ export function ConnectionPage({ tabId }: { tabId: string }) {
   const isFailed = tab.connectionStatus === 'failed';
   const isConnected = tab.connectionStatus === 'connected';
 
-  // === ЕСЛИ ПОДКЛЮЧЕНО — СРАЗУ ПОКАЗЫВАЕМ ТЕРМИНАЛ ===
+  // === ЕСЛИ ПОДКЛЮЧЕНО — ТЕРМИНАЛ СВЕРХУ, МЕТРИКИ ВНИЗУ ===
   if (isConnected) {
     return (
-      <div className="flex-1 w-full bg-[#1e1e2e]" style={{ height: 'calc(100vh - 40px)' }}>
-        <Terminal sessionId={tabId} />
+      <div className="flex flex-col flex-1 w-full h-full bg-[#1e1e2e]">
+        {/* Терминал занимает всё доступное пространство */}
+        <div className="flex-1 h-full overflow-hidden">
+          <Terminal sessionId={tabId} />
+        </div>
+        
+        {/* Панель метрик внизу экрана */}
+        <div className="border-t border-[#2a3a4a] bg-[#1e1e2e]">
+          <HostMetricsWidget hostId={tab.hostId!} sessionId={tabId} />        </div>
       </div>
     );
   }
@@ -131,7 +139,9 @@ export function ConnectionPage({ tabId }: { tabId: string }) {
             <button 
               onClick={() => {
                 updateConnectionStatus(tabId, 'connecting');
-                useStore.getState().tabs = useStore.getState().tabs.map(t => t.id === tabId ? { ...t, connectionLog: [] } : t);
+                useStore.setState({
+                  tabs: useStore.getState().tabs.map(t => t.id === tabId ? { ...t, connectionLog: [] } : t)
+                });
                 hasConnected.current = false;
               }}
               className="bg-[#007AFF] hover:bg-[#0062cc] text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"

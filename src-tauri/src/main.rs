@@ -9,8 +9,11 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             ssh::ssh_connect,
             ssh::ssh_send,
-            ssh::ssh_resize
+            ssh::ssh_resize,
+            ssh::get_host_metrics,
+            
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+

@@ -14,6 +14,7 @@ export interface Host {
   createdAt: number;
 }
 
+
 export interface Group {
   id: string;
   name: string;
@@ -92,6 +93,18 @@ export interface Tab {
   connectionLog?: string[];
 }
 
+export interface HostMetrics {
+  cpuUsage: number;
+  memoryUsage: number;
+  memoryUsed: string;
+  diskUsage: number;
+  diskUsed: string;
+  networkDown: string;
+  networkUp: string;
+  uptime: string;
+  lastUpdate: number;
+}
+
 export type KeyPanelMode = 'new' | 'touch-id' | 'fido2' | 'certificate';
 export type Page = 'hosts' | 'keychain' | 'port-forwarding' | 'snippets' | 'known-hosts' | 'logs';
 export type TopTab = 'vaults' | 'sftp' | 'serial';
@@ -142,6 +155,7 @@ interface AppState {
   snippetMenuOpen: boolean;
   showShellHistory: boolean;
   activeTabId: string;
+  hostMetrics: Record<string, HostMetrics | null>; // hostId -> metrics
 
   // Actions (Hosts & General)
   setActivePage: (page: Page) => void;
@@ -206,6 +220,8 @@ interface AppState {
   closeTab: (tabId: string) => void;
   updateConnectionStatus: (tabId: string, status: 'connecting' | 'connected' | 'failed') => void;
   addConnectionLog: (tabId: string, log: string) => void;
+   setHostMetrics: (hostId: string, metrics: HostMetrics) => void; // ✅ ДОБАВЬТЕ
+  clearHostMetrics: (hostId: string) => void; // ✅ ДОБАВЬТЕ
 }
 
 const initialHosts: Host[] = [
@@ -252,6 +268,7 @@ export const useStore = create<AppState>((set, get) => {
     if (persisted) {
       set({ hosts: persisted.hosts, groups: persisted.groups });
     }
+    
   });
 
   return {
@@ -299,6 +316,8 @@ export const useStore = create<AppState>((set, get) => {
     snippetMenuOpen: false,
     showShellHistory: false,
     activeTabId: 'tab-vaults',
+    hostMetrics: {},
+    metricsInterval: null,
 
     // Actions
     setActivePage: (page) => set({ activePage: page, isPanelOpen: false, selectedHostId: null, selectedGroupId: null, contextMenu: null }),
@@ -306,6 +325,7 @@ export const useStore = create<AppState>((set, get) => {
     setSelectedHost: (id) => set({ selectedHostId: id }),
     setSelectedGroup: (id) => set({ selectedGroupId: id }),
     setNewTabOpen: (open) => set({ newTabOpen: open }),
+   
     
     // ✅ ИСПРАВЛЕНО: правильная реализация внутри return
     setViewMode: (mode: 'grid' | 'list') => set({ viewMode: mode }),
@@ -427,6 +447,7 @@ export const useStore = create<AppState>((set, get) => {
         activeTabId: newTab.id,
       }));
     },
+    
 
     setActiveTab: (tabId) => set({ activeTabId: tabId }),
 
@@ -454,5 +475,15 @@ export const useStore = create<AppState>((set, get) => {
     addConnectionLog: (tabId, log) => set((state) => ({
       tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionLog: [...(t.connectionLog || []), log] } : t)
     })),
+    setHostMetrics: (hostId, metrics) => set((state) => ({
+      hostMetrics: { ...state.hostMetrics, [hostId]: metrics }
+    })),
+
+    clearHostMetrics: (hostId) => set((state) => {
+      const newMetrics = { ...state.hostMetrics };
+      delete newMetrics[hostId];
+      return { hostMetrics: newMetrics };
+    }),
   };
+  
 });
