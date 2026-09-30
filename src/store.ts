@@ -446,6 +446,8 @@ export const useStore = create<AppState>((set, get) => {
       tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionStatus: status } : t)
     })),
 
+    
+
     addConnectionLog: (tabId, log) => set((state) => ({
       tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionLog: [...(t.connectionLog || []), log] } : t)
     })),

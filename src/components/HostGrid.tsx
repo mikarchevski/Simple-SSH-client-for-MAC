@@ -132,7 +132,18 @@ export function HostGrid() {
     </div>
   );
 }
-
+// В обработчике ПКМ на карточке хоста
+const handleContextMenu = (e: React.MouseEvent, hostId: string) => {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  useStore.getState().openContextMenu(hostId);
+  
+  // Отправляем координаты через кастомное событие
+  window.dispatchEvent(
+    new CustomEvent('contextmenu-open', { detail: { x: e.clientX, y: e.clientY } })
+  );
+};
 function HostCard({ host, onClick, onContextMenu }: any) {
   const selectedHostId = useStore((state) => state.selectedHostId);
   const isSelected = selectedHostId === host.id;
@@ -147,6 +158,7 @@ function HostCard({ host, onClick, onContextMenu }: any) {
 
   return (
     <div 
+    data-host-id={host.id}
       onClick={onClick}
       onDoubleClick={handleDoubleClick}  // <-- ДОБАВЛЕНО
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e); }}
