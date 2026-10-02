@@ -125,7 +125,6 @@ export function RightPanel() {
               {/* Кнопка Done */}
               <button 
                 onClick={() => {
-                  setEditingGroupId(null);
                   closePanel();
                 }}
                 className="w-full bg-[#007AFF] hover:bg-[#0062cc] text-white py-2.5 rounded-md text-sm font-medium transition-colors"
