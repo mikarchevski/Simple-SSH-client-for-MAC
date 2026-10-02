@@ -1,4 +1,4 @@
-import { MoreVertical, ArrowRight, Folder, Tag, HardDrive, User, Lock, Users, ChevronDown, Plus, Eye, EyeOff, Zap, Code2, Server, ArrowRightLeft } from 'lucide-react';
+import { MoreVertical, ArrowRight, Folder, Tag, HardDrive, User, Lock, Users, ChevronDown, Plus, Eye, EyeOff, Zap, Code2, Server, ArrowRightLeft, Trash2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useStore, Group } from '../store';
 
@@ -116,8 +116,9 @@ export function RightPanel() {
                     useStore.getState().openDeleteGroupModal(editingGroup.id);
                   }
                 }}
-                className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+        className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md px-3 py-2 text-sm font-medium transition-colors flex items-center justify-center space-x-4"
               >
+                <Trash2 size={14}className="mr-2" />
                 Delete Group
               </button>
               
@@ -141,8 +142,9 @@ export function RightPanel() {
                     openDeleteModal(selectedHostId);
                   }
                 }}
-                className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+        className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md px-3 py-2 text-sm font-medium transition-colors flex items-center justify-center space-x-2"
               >
+                <Trash2 size={14} className="mr-2" />
                 Delete Host
               </button>
               
@@ -606,19 +608,13 @@ function GroupForm({
             placeholder="Set a group name..."
             autoFocus
           />
+          
         </div>
-
+<FormButton icon={<Folder size={14} />} label="Parent Group" />
         <div className="text-xs text-gray-500">
           {groupHosts.length} {groupHosts.length === 1 ? 'host' : 'hosts'} in group
         </div>
       </FormSection>
-
-      <FormSection title="Settings">
-        <FormButton icon={<Users size={14} />} label="Share this group" />
-        <FormButton icon={<Folder size={14} />} label="Parent Group" />
-      </FormSection>
-
-      <AdvancedOptions />
     </>
   );
 }
