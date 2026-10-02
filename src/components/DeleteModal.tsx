@@ -1,58 +1,70 @@
-import { X, Server } from 'lucide-react';
 import { useStore } from '../store';
 
 export function DeleteModal() {
-  const { pendingDeleteHostId, hosts, closeDeleteModal, removeHost } = useStore();
-  const host = hosts.find(h => h.id === pendingDeleteHostId);
+  const { 
+    pendingDeleteHostId, 
+    pendingDeleteGroupId,
+    closeDeleteModal, 
+    closeDeleteGroupModal,
+    removeHost, 
+    removeGroup,
+    hosts,
+    groups,
+    setEditingGroupId,
+    closePanel
+  } = useStore();
 
-  if (!host) return null;
+  // Определяем, что удаляем
+  const isDeletingHost = pendingDeleteHostId !== null;
+  const isDeletingGroup = pendingDeleteGroupId !== null;
 
-  const handleRemove = () => {
-    removeHost(host.id);
-    closeDeleteModal();
+  if (!isDeletingHost && !isDeletingGroup) return null;
+
+  const host = isDeletingHost ? hosts.find(h => h.id === pendingDeleteHostId) : null;
+  const group = isDeletingGroup ? groups.find(g => g.id === pendingDeleteGroupId) : null;
+
+  const handleConfirm = () => {
+    if (isDeletingHost && pendingDeleteHostId) {
+      removeHost(pendingDeleteHostId);
+      closeDeleteModal();
+    } else if (isDeletingGroup && pendingDeleteGroupId) {
+      removeGroup(pendingDeleteGroupId);
+      setEditingGroupId(null);
+      closePanel();
+      closeDeleteGroupModal();
+    }
   };
 
+  const title = isDeletingHost ? 'Delete Host' : 'Delete Group';
+  const name = isDeletingHost ? host?.label : group?.name;
+  const message = isDeletingHost 
+    ? `Are you sure you want to delete "${name}"? This action cannot be undone.`
+    : `Are you sure you want to delete group "${name}"? Hosts in this group will not be deleted, but will become ungrouped.`;
+
   return (
-    <>
-      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={closeDeleteModal}>
-        <div 
-          className="bg-[#1e1e2e] border border-[#3a3a4a] rounded-xl shadow-2xl w-[480px] overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#2a2a3a]">
-            <h2 className="text-xl font-semibold text-gray-100">Remove a host</h2>
-            <button onClick={closeDeleteModal} className="text-gray-400 hover:text-white transition-colors">
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* Body */}
-          <div className="px-6 py-8">
-            <p className="text-gray-300 mb-4">You are going to remove this host:</p>
-            
-            <div className="bg-[#252535] border border-[#3a3a4a] rounded-lg p-4 flex items-center space-x-3">
-              <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
-                <Server size={24} />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-gray-100">{host.label}</h3>
-                <p className="text-sm text-gray-500 mt-0.5">{host.tags.join(', ')}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-4 flex justify-end border-t border-[#2a2a3a]">
-            <button 
-              onClick={handleRemove}
-              className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              Remove
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center">
+      <div className="bg-[#1e1e2e] border border-[#2a2a3a] rounded-lg shadow-2xl p-6 max-w-sm w-full mx-4">
+        <h3 className="text-lg font-semibold text-gray-100 mb-2">{title}</h3>
+        <p className="text-sm text-gray-400 mb-6">{message}</p>
+        
+        <div className="flex space-x-3">
+          <button
+            onClick={() => {
+              if (isDeletingHost) closeDeleteModal();
+              else closeDeleteGroupModal();
+            }}
+            className="flex-1 bg-[#2a2a3a] hover:bg-[#3a3a4a] text-gray-200 py-2 rounded-md text-sm font-medium transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-md text-sm font-medium transition-colors"
+          >
+            Delete
+          </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

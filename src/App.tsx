@@ -20,11 +20,10 @@ import { TagFilter } from './components/TagFilter';
 
 function App() {
   const { 
-    searchQuery, setSearchQuery, openNewHostPanel, activePage, activeTopTab, setActiveTopTab,
-    selectedTags, tagFilterOpen, setTagFilterOpen, newHostMenuOpen, setNewHostMenuOpen,
-    newTabOpen, setNewTabOpen,
-    tabs, activeTabId, setActiveTab, closeTab // <-- Добавили closeTab
-  } = useStore();
+  searchQuery, setSearchQuery, openNewHostPanel, createGroup, activePage, activeTopTab, setActiveTopTab,
+  selectedTags, tagFilterOpen, setTagFilterOpen, newHostMenuOpen, setNewHostMenuOpen,
+  newTabOpen, setNewTabOpen, tabs, activeTabId, setActiveTab, closeTab 
+} = useStore();
 
   const newHostMenuRef = useRef<HTMLDivElement>(null);
   const activeTab = tabs.find(t => t.id === activeTabId);
@@ -153,9 +152,19 @@ function App() {
                           top: (newHostMenuRef.current?.getBoundingClientRect().bottom || 0) + 4,
                         }}
                       >
-                        <button onClick={() => setNewHostMenuOpen(false)} className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors flex items-center space-x-2 text-gray-200">
-                          <Folder size={14} /><span>New Group</span>
+                        {/* ✅ ИСПРАВЛЕННАЯ КНОПКА NEW GROUP */}
+                        <button 
+                          onClick={() => {
+                            createGroup();           // 1. Создаем группу в сторе
+                            openNewHostPanel();      // 2. Открываем правую панель
+                            setNewHostMenuOpen(false); // 3. Закрываем это меню
+                          }} 
+                          className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors flex items-center space-x-2 text-gray-200"
+                        >
+                          <Folder size={14} />
+                          <span>New Group</span>
                         </button>
+
                         <button onClick={() => setNewHostMenuOpen(false)} className="w-full px-3 py-1.5 text-sm text-left hover:bg-[#3a3a4a] transition-colors flex items-center space-x-2 text-gray-200">
                           <Download size={14} /><span>Import</span>
                         </button>

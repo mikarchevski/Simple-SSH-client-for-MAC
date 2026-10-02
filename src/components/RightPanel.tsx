@@ -1,17 +1,18 @@
 import { MoreVertical, ArrowRight, Folder, Tag, HardDrive, User, Lock, Users, ChevronDown, Plus, Eye, EyeOff, Zap, Code2, Server, ArrowRightLeft } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { useStore } from '../store';
+import { useStore, Group } from '../store';
 
 export function RightPanel() {
   const { 
     isPanelOpen, panelMode, selectedHostId, hosts, closePanel, addHost, updateHost, 
-    panelMenuOpen, togglePanelMenu, closePanelMenu, duplicateHost, openDeleteModal 
+    panelMenuOpen, togglePanelMenu, closePanelMenu, duplicateHost, openDeleteModal,
+    editingGroupId, groups, updateGroup, removeGroup, setEditingGroupId
   } = useStore();
-  
+
+  const editingGroup = groups.find(g => g.id === editingGroupId);
   const selectedHost = hosts.find(h => h.id === selectedHostId);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // ✅ 1. Поднимаем состояние формы нового хоста сюда, чтобы контролировать валидацию нижней кнопки
   const [newHostForm, setNewHostForm] = useState({
     address: '',
     label: '',
@@ -21,8 +22,9 @@ export function RightPanel() {
     tags: [] as string[],
     groupId: undefined as string | undefined,
   });
+  
+  const isGroupMode = editingGroupId !== null;
 
-  // Сброс формы при открытии режима создания нового хоста
   useEffect(() => {
     if (panelMode === 'new') {
       setNewHostForm({
@@ -49,14 +51,24 @@ export function RightPanel() {
 
   if (!isPanelOpen) return null;
 
-  // ✅ 2. Логика валидации: кнопка активна только если заполнены Host IP (address) и Label
   const isNewHostFormValid = newHostForm.address.trim() !== '' && newHostForm.label.trim() !== '';
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-40" onClick={closePanel} />
+      <div className="fixed inset-0 bg-black/50 z-40" onClick={() => {
+        useStore.getState().cancelGroupEditing();
+      }} />
       <div className="fixed right-0 top-0 h-full w-96 bg-[#1e1e2e] border-l border-[#2a2a3a] z-50 shadow-2xl flex flex-col">
-        <PanelHeader mode={panelMode} onClose={closePanel} />
+        <PanelHeader 
+          mode={isGroupMode ? 'edit-group' : panelMode} 
+          onClose={() => {
+            if (isGroupMode) {
+              setEditingGroupId(null);
+            } else {
+              closePanel();
+            }
+          }} 
+        />
         
         {panelMenuOpen && panelMode === 'details' && (
           <div 
@@ -76,38 +88,101 @@ export function RightPanel() {
         )}
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {panelMode === 'new' ? (
-            // ✅ 3. Передаем состояние формы вниз как пропсы
+          {isGroupMode && editingGroup ? (
+            <GroupForm 
+              group={editingGroup} 
+              onSave={(updates) => updateGroup(editingGroup.id, updates)}
+              onDelete={() => {
+                removeGroup(editingGroup.id);
+                setEditingGroupId(null);
+                closePanel();
+              }}
+            />
+          ) : panelMode === 'new' ? (
             <NewHostForm form={newHostForm} setForm={setNewHostForm} />
           ) : selectedHost ? (
             <HostDetailsForm host={selectedHost} onSave={(updates) => updateHost(selectedHost.id, updates)} />
           ) : null}
         </div>
 
-        {/* ✅ 4. Нижняя кнопка теперь универсальна и реактивна (disabled) */}
-        <div className="p-4 border-t border-[#2a3a4a]">
-          <button 
-            onClick={() => {
-              if (panelMode === 'new') {
-                const newHost = {
-                  id: `h${Date.now()}`,
-                  ...newHostForm,
-                  os: 'generic' as const,
-                  createdAt: Date.now(),
-                };
-                addHost(newHost);
-                useStore.getState().addConnectionTab(newHost.id);
-                closePanel();
-              } else if (selectedHostId) {
-                useStore.getState().addConnectionTab(selectedHostId);
-                closePanel();
-              }
-            }}
-            disabled={panelMode === 'new' && !isNewHostFormValid}
-            className="w-full bg-[#007AFF] hover:bg-[#0062cc] disabled:bg-[#3a3a4a] disabled:cursor-not-allowed text-white py-2.5 rounded-md text-sm font-medium transition-colors"
-          >
-            Connect
-          </button>
+        {/* Нижняя панель с кнопками */}
+        <div className="p-4 border-t border-[#2a3a4a] space-y-2">
+          {isGroupMode ? (
+            <>
+              {/* Кнопка удаления группы */}
+              <button 
+                onClick={() => {
+                  if (editingGroup) {
+                    useStore.getState().openDeleteGroupModal(editingGroup.id);
+                  }
+                }}
+                className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+              >
+                Delete Group
+              </button>
+              
+              {/* Кнопка Done */}
+              <button 
+                onClick={() => {
+                  setEditingGroupId(null);
+                  closePanel();
+                }}
+                className="w-full bg-[#007AFF] hover:bg-[#0062cc] text-white py-2.5 rounded-md text-sm font-medium transition-colors"
+              >
+                Done
+              </button>
+            </>
+          ) : panelMode === 'details' ? (
+            <>
+              {/* Кнопка удаления хоста */}
+              <button 
+                onClick={() => {
+                  if (selectedHostId) {
+                    openDeleteModal(selectedHostId);
+                  }
+                }}
+                className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+              >
+                Delete Host
+              </button>
+              
+              {/* Кнопка Connect */}
+              <button 
+                onClick={() => {
+                  if (selectedHostId) {
+                    useStore.getState().addConnectionTab(selectedHostId);
+                    closePanel();
+                  }
+                }}
+                className="w-full bg-[#007AFF] hover:bg-[#0062cc] text-white py-2.5 rounded-md text-sm font-medium transition-colors"
+              >
+                Connect
+              </button>
+            </>
+          ) : (
+            <button 
+              onClick={() => {
+                if (panelMode === 'new') {
+                  const newHost = {
+                    id: `h${Date.now()}`,
+                    ...newHostForm,
+                    os: 'generic' as const,
+                    createdAt: Date.now(),
+                  };
+                  addHost(newHost);
+                  useStore.getState().addConnectionTab(newHost.id);
+                  closePanel();
+                } else if (selectedHostId) {
+                  useStore.getState().addConnectionTab(selectedHostId);
+                  closePanel();
+                }
+              }}
+              disabled={panelMode === 'new' && !isNewHostFormValid}
+              className="w-full bg-[#007AFF] hover:bg-[#0062cc] disabled:bg-[#3a3a4a] disabled:cursor-not-allowed text-white py-2.5 rounded-md text-sm font-medium transition-colors"
+            >
+              Connect
+            </button>
+          )}
         </div>
       </div>
     </>
@@ -116,7 +191,6 @@ export function RightPanel() {
 
 // --- КОМПОНЕНТЫ ФОРМЫ ---
 
-// ... (компоненты TagInput и GroupSelector остаются без изменений) ...
 function TagInput({ tags = [], onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
   const [inputValue, setInputValue] = useState('');
 
@@ -302,10 +376,8 @@ function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) =
   );
 }
 
-// ✅ 5. NewHostForm теперь "глупый" компонент, который просто принимает form и setForm
-// ✅ 5. NewHostForm теперь использует реальные компоненты выбора
 function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
-  const groups = useStore((state) => state.groups); // Получаем список групп
+  const groups = useStore((state) => state.groups);
 
   return (
     <>
@@ -333,7 +405,6 @@ function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
           placeholder="Label"
         />
         
-        {/* ✅ ЗАМЕНЕНО: Реальный выбор группы вместо мертвой кнопки */}
         <div className="mb-3">
           <label className="text-xs text-gray-500 mb-1 block">Group</label>
           <GroupSelector 
@@ -343,7 +414,6 @@ function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
           />
         </div>
 
-        {/* ✅ ЗАМЕНЕНО: Реальный ввод тегов вместо мертвой кнопки */}
         <div>
           <label className="text-xs text-gray-500 mb-1 block">Tags</label>
           <TagInput 
@@ -372,14 +442,24 @@ function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
   );
 }
 
-// --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ (без изменений) ---
+// --- ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 
-function PanelHeader({ mode, onClose }: { mode: 'new' | 'details'; onClose: () => void }) {
+function PanelHeader({ mode, onClose }: { mode: 'new' | 'details' | 'edit-group'; onClose: () => void }) {
   const { panelMenuOpen, togglePanelMenu } = useStore();
+  
+  const getTitle = () => {
+    switch (mode) {
+      case 'new': return 'New Host';
+      case 'details': return 'Host Details';
+      case 'edit-group': return 'New Group';
+      default: return 'New Host';
+    }
+  };
+
   return (
     <div className="h-14 border-b border-[#2a2a3a] flex items-center justify-between px-4 flex-shrink-0 relative">
       <div>
-        <h2 className="text-lg font-semibold text-gray-100">{mode === 'new' ? 'New Host' : 'Host Details'}</h2>
+        <h2 className="text-lg font-semibold text-gray-100">{getTitle()}</h2>
         <p className="text-xs text-gray-500">Personal vault</p>
       </div>
       <div className="flex items-center space-x-2">
@@ -388,7 +468,7 @@ function PanelHeader({ mode, onClose }: { mode: 'new' | 'details'; onClose: () =
             <MoreVertical size={18} />
           </button>
         )}
-        <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-white transition-colors">
+        <button onClick={() => useStore.getState().cancelGroupEditing()} className="p-1.5 text-gray-400 hover:text-white transition-colors">
           <ArrowRight size={18} />
         </button>
       </div>
@@ -482,6 +562,63 @@ function AdvancedOptions() {
       <button className="w-full bg-[#252535] border border-[#333] rounded-lg p-4 text-gray-400 hover:text-gray-200 hover:border-[#444] transition-colors flex items-center justify-center space-x-2">
         <Plus size={16} /><span className="text-sm">Add Telnet</span>
       </button>
+    </>
+  );
+}
+
+function GroupForm({ 
+  group, 
+  onSave, 
+  onDelete 
+}: { 
+  group: Group; 
+  onSave: (updates: Partial<Group>) => void;
+  onDelete: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: group.name,
+  });
+
+  const hosts = useStore((state) => state.hosts);
+  const groupHosts = hosts.filter(h => h.groupId === group.id);
+
+  useEffect(() => {
+    const timer = setTimeout(() => { 
+      if (form.name.trim()) {
+        onSave({ name: form.name.trim() });
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [form.name, onSave]);
+
+  return (
+    <>
+      <FormSection title="General">
+        <div className="flex items-center space-x-3 mb-3">
+          <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
+            <Folder size={18} />
+          </div>
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="flex-1 bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a]"
+            placeholder="Set a group name..."
+            autoFocus
+          />
+        </div>
+
+        <div className="text-xs text-gray-500">
+          {groupHosts.length} {groupHosts.length === 1 ? 'host' : 'hosts'} in group
+        </div>
+      </FormSection>
+
+      <FormSection title="Settings">
+        <FormButton icon={<Users size={14} />} label="Share this group" />
+        <FormButton icon={<Folder size={14} />} label="Parent Group" />
+      </FormSection>
+
+      <AdvancedOptions />
     </>
   );
 }

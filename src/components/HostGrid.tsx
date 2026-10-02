@@ -51,21 +51,39 @@ export function HostGrid() {
         <section className="mb-8">
           <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">Groups</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {groups.map(group => (
-              <div 
-                key={group.id} 
-                onClick={() => setSelectedGroup(group.id)}
-                className="bg-[#252535] border border-[#333] rounded-lg p-4 flex items-center space-x-3 hover:border-[#444] hover:bg-[#2a2a3a] cursor-pointer transition-all"
-              >
-                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
-                  <Folder size={20} />
+            {groups
+              .filter(g => !g.isDraft)
+              .map(group => (
+                <div 
+                  key={group.id} 
+                  onDoubleClick={() => setSelectedGroup(group.id)}
+                  className="bg-[#252535] border border-[#333] rounded-lg p-4 flex items-center space-x-3 hover:border-[#444] hover:bg-[#2a2a3a] cursor-pointer transition-all group relative"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">
+                    <Folder size={20} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-gray-100 truncate">{group.name}</h3>
+                    <p className="text-xs text-gray-500">
+                      {hosts.filter(h => h.groupId === group.id).length} Hosts
+                    </p>
+                  </div>
+                  
+                  {/* Карандаш для редактирования группы */}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        useStore.getState().setEditingGroupId(group.id);
+                        useStore.getState().openNewHostPanel();
+                      }}
+                      className="p-1 text-gray-400 hover:text-white bg-[#1e1e2e] rounded"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-100">{group.name}</h3>
-                  <p className="text-xs text-gray-500">{group.count} Hosts</p>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </section>
       )}
