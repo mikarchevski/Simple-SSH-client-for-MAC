@@ -8,7 +8,8 @@ export function HostGrid() {
     hosts, groups, searchQuery, openNewHostPanel, openHostDetails, 
     selectedHostId, setSelectedHost, openContextMenu, selectedGroupId, setSelectedGroup,
     showInviteBanner, setShowInviteBanner, selectedTags,
-    tagFilterOpen, setTagFilterOpen, newHostMenuOpen, setNewHostMenuOpen
+    tagFilterOpen, setTagFilterOpen, newHostMenuOpen, setNewHostMenuOpen,
+    openGroupContextMenu,closeContextMenu
   } = useStore();
 
   const filteredHosts = hosts.filter(h => {
@@ -57,6 +58,11 @@ export function HostGrid() {
                 <div 
                   key={group.id} 
                   onDoubleClick={() => setSelectedGroup(group.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openGroupContextMenu(e.clientX, e.clientY, group.id);
+                  }}
                   className="bg-[#252535] border border-[#333] rounded-lg p-4 flex items-center space-x-3 hover:border-[#444] hover:bg-[#2a2a3a] cursor-pointer transition-all group relative"
                 >
                   <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 flex-shrink-0">

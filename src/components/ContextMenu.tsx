@@ -2,67 +2,70 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import {
   Zap, Plug, LayoutGrid, Pencil, Users, ArrowRight,
-  Copy, FileText, Link2, Trash2
+  Copy, FileText, Link2, Trash2, Folder
 } from 'lucide-react';
 
 export function ContextMenu() {
   const { 
-    contextMenu, closeContextMenu, hosts, openDeleteModal, duplicateHost 
+    contextMenu, 
+    closeContextMenu, 
+    hosts, 
+    groups,
+    openDeleteModal, 
+    duplicateHost,
+    duplicateGroup,
+    openDeleteGroupModal,
+    setEditingGroupId,
+    openNewHostPanel
   } = useStore();
 
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
   const isOpen = contextMenu !== null;
+  const isGroup = !!contextMenu?.groupId;
+  const isHost = !!contextMenu?.hostId;
+
   const selectedHostId = contextMenu?.hostId || null;
   const selectedHost = selectedHostId ? hosts.find(h => h.id === selectedHostId) : undefined;
 
+  const selectedGroupId = contextMenu?.groupId || null;
+  const selectedGroup = selectedGroupId ? groups.find(g => g.id === selectedGroupId) : undefined;
+
+  // Умное позиционирование (работает и для хостов, и для групп)
   useEffect(() => {
     if (!contextMenu) return;
 
-    const menuWidth = 260;
-    const menuHeight = 420;
+    const menuWidth = isGroup ? 200 : 260; // Группа чуть уже
+    const menuHeight = isGroup ? 180 : 420;
     const padding = 8;
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
 
-    //  ГОРИЗОНТАЛЬНОЕ ПОЗИЦИОНИРОВАНИЕ
-    let x = contextMenu.x + padding; // По умолчанию справа от курсора
-    
-    // Если не помещается справа → пробуем слева
+    let x = contextMenu.x + padding;
     if (x + menuWidth > viewportWidth - padding) {
       x = contextMenu.x - menuWidth - padding;
     }
-    
-    // Прижимаем к краям если нужно
     if (x < padding) x = padding;
     if (x + menuWidth > viewportWidth - padding) {
       x = viewportWidth - menuWidth - padding;
     }
 
-    //  ВЕРТИКАЛЬНОЕ ПОЗИЦИОНИРОВАНИЕ
     const spaceBelow = viewportHeight - contextMenu.y;
     const spaceAbove = contextMenu.y;
     
     let y: number;
     let availableHeight: number;
-    let direction: 'down' | 'up';
 
-    // Определяем направление: если снизу достаточно места → вниз, иначе → вверх
     if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
-      // ⬇️ Открываем ВНИЗ от курсора
-      direction = 'down';
       y = contextMenu.y + padding;
       availableHeight = Math.min(spaceBelow - padding, menuHeight);
     } else {
-      // ️ Открываем ВВЕРХ от курсора
-      // Меню должно ЗАКАНЧИВАТЬСЯ у курсора (без двойного padding!)
-      direction = 'up';
-      availableHeight = Math.min(spaceAbove - padding  , menuHeight);
       y = contextMenu.y - availableHeight; 
+      availableHeight = Math.min(spaceAbove - padding, menuHeight);
+      y = contextMenu.y - availableHeight;
     }
 
-    // Финальная проверка и прижим к краям
     if (y < padding) {
       y = padding;
       availableHeight = Math.min(viewportHeight - padding * 2, menuHeight);
@@ -74,8 +77,9 @@ export function ContextMenu() {
 
     menuRef.current?.style.setProperty('--menu-max-height', `${availableHeight}px`);
     setPosition({ x, y });
-  }, [contextMenu]);
+  }, [contextMenu, isGroup]);
 
+  // Закрытие по клику вне меню
   useEffect(() => {
     if (!isOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -87,6 +91,7 @@ export function ContextMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, closeContextMenu]);
 
+  // Закрытие по Escape
   useEffect(() => {
     if (!isOpen) return;
     const handleEsc = (e: KeyboardEvent) => {
@@ -96,82 +101,141 @@ export function ContextMenu() {
     return () => document.removeEventListener('keydown', handleEsc);
   }, [isOpen, closeContextMenu]);
 
-  if (!isOpen || !selectedHost || !selectedHostId) return null;
+  // Если меню закрыто или нет ни хоста, ни группы — не рендерим ничего
+  if (!isOpen || (!isHost && !isGroup)) return null;
 
-  const menuItems = [
-    { icon: <Zap size={16} />, label: 'Quick Connect', action: () => { useStore.getState().addConnectionTab(selectedHostId); closeContextMenu(); } },
-    { icon: <Plug size={16} />, label: 'Connect', hasSubmenu: true, action: () => { useStore.getState().addConnectionTab(selectedHostId); closeContextMenu(); } },
-    { icon: <LayoutGrid size={16} />, label: 'Add to Workspace', hasSubmenu: true, action: () => closeContextMenu() },
-    { divider: true },
-    { icon: <Pencil size={16} />, label: 'Edit Host Details', shortcut: 'E', action: () => { useStore.getState().openHostDetails(selectedHostId); closeContextMenu(); } },
-    { icon: <Users size={16} />, label: 'Collaborate', action: () => closeContextMenu() },
-    { icon: <ArrowRight size={16} />, label: 'Move to', hasSubmenu: true, action: () => closeContextMenu() },
-    { icon: <Copy size={16} />, label: 'Copy to', hasSubmenu: true, action: () => closeContextMenu() },
-    { icon: <FileText size={16} />, label: 'Duplicate', action: () => { duplicateHost(selectedHostId); closeContextMenu(); } },
-    { icon: <Link2 size={16} />, label: 'Copy Link', action: () => closeContextMenu() },
-    { divider: true },
-    { icon: <Trash2 size={16} />, label: 'Remove', danger: true, action: () => { openDeleteModal(selectedHostId); closeContextMenu(); } },
-  ];
-
-  return (
-    <div
-      ref={menuRef}
-      className="fixed z-[9999] bg-[#252535] border border-[#3a3a4a] rounded-xl shadow-2xl py-1.5 min-w-[240px]"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        maxHeight: 'var(--menu-max-height, 420px)',
-        overflowY: 'auto',
-      }}
-    >
-      <style>{`
-        .context-menu-scroll::-webkit-scrollbar { width: 6px; }
-        .context-menu-scroll::-webkit-scrollbar-track { background: transparent; }
-        .context-menu-scroll::-webkit-scrollbar-thumb { background: #3a3a4a; border-radius: 3px; }
-        .context-menu-scroll::-webkit-scrollbar-thumb:hover { background: #4a4a5a; }
-      `}</style>
-
-      <div className="context-menu-scroll">
-        {menuItems.map((item, idx) => {
-          if ('divider' in item && item.divider) {
-            return <div key={idx} className="my-1 border-t border-[#3a3a4a]" />;
-          }
-
-          const menuItem = item as {
-            icon: React.ReactNode;
-            label: string;
-            shortcut?: string;
-            hasSubmenu?: boolean;
-            danger?: boolean;
-            action: () => void;
-          };
-
-          return (
-            <button
-              key={idx}
-              onClick={menuItem.action}
-              className={`w-full px-3 py-2 text-sm text-left flex items-center justify-between transition-colors ${
-                menuItem.danger
-                  ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300'
-                  : 'text-gray-200 hover:bg-[#3a3a4a]'
-              }`}
-            >
-              <span className="flex items-center space-x-3">
-                {menuItem.icon}
-                <span>{menuItem.label}</span>
-              </span>
-              <span className="flex items-center space-x-2">
-                {menuItem.shortcut && (
-                  <kbd className="px-1.5 py-0.5 text-xs bg-[#1e1e2e] rounded border border-[#3a3a4a] text-gray-400">
-                    {menuItem.shortcut}
-                  </kbd>
-                )}
-                {menuItem.hasSubmenu && <ArrowRight size={14} className="text-gray-500" />}
-              </span>
-            </button>
-          );
-        })}
+  // --- МЕНЮ ДЛЯ ГРУППЫ ---
+  if (isGroup && selectedGroup) {
+    return (
+      <div
+        ref={menuRef}
+        className="fixed z-[9999] bg-[#252535] border border-[#3a3a4a] rounded-xl shadow-2xl py-1.5 min-w-[200px]"
+        style={{
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+        }}
+      >
+        <button
+          onClick={() => {
+            if (selectedGroupId) {
+              setEditingGroupId(selectedGroupId);
+              openNewHostPanel();
+              closeContextMenu();
+            }
+          }}
+          className="w-full px-3 py-2 text-sm text-left text-gray-200 hover:bg-[#3a3a4a] transition-colors flex items-center space-x-3"
+        >
+          <Pencil size={16} /> <span>Edit group Details</span>
+        </button>
+        
+        <button
+          onClick={() => {
+            if (selectedGroupId) {
+              duplicateGroup(selectedGroupId);
+              closeContextMenu();
+            }
+          }}
+          className="w-full px-3 py-2 text-sm text-left text-gray-200 hover:bg-[#3a3a4a] transition-colors flex items-center space-x-3"
+        >
+          <Copy size={16} /> <span>Duplicate</span>
+        </button>
+        
+        <div className="my-1 border-t border-[#3a3a4a]" />
+        
+        <button
+          onClick={() => {
+            if (selectedGroupId) {
+              openDeleteGroupModal(selectedGroupId);
+              closeContextMenu();
+            }
+          }}
+          className="w-full px-3 py-2 text-sm text-left text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors flex items-center space-x-3"
+        >
+          <Trash2 size={16} /> <span>Delete</span>
+        </button>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // --- МЕНЮ ДЛЯ ХОСТА ---
+  if (isHost && selectedHost) {
+    const menuItems = [
+      { icon: <Zap size={16} />, label: 'Quick Connect', action: () => { useStore.getState().addConnectionTab(selectedHostId!); closeContextMenu(); } },
+      { icon: <Plug size={16} />, label: 'Connect', hasSubmenu: true, action: () => { useStore.getState().addConnectionTab(selectedHostId!); closeContextMenu(); } },
+      { icon: <LayoutGrid size={16} />, label: 'Add to Workspace', hasSubmenu: true, action: () => closeContextMenu() },
+      { divider: true },
+      { icon: <Pencil size={16} />, label: 'Edit Host Details', shortcut: 'E', action: () => { useStore.getState().openHostDetails(selectedHostId!); closeContextMenu(); } },
+      { icon: <Users size={16} />, label: 'Collaborate', action: () => closeContextMenu() },
+      { icon: <ArrowRight size={16} />, label: 'Move to', hasSubmenu: true, action: () => closeContextMenu() },
+      { icon: <Copy size={16} />, label: 'Copy to', hasSubmenu: true, action: () => closeContextMenu() },
+      { icon: <FileText size={16} />, label: 'Duplicate', action: () => { duplicateHost(selectedHostId!); closeContextMenu(); } },
+      { icon: <Link2 size={16} />, label: 'Copy Link', action: () => closeContextMenu() },
+      { divider: true },
+      { icon: <Trash2 size={16} />, label: 'Remove', danger: true, action: () => { openDeleteModal(selectedHostId!); closeContextMenu(); } },
+    ];
+
+    return (
+      <div
+        ref={menuRef}
+        className="fixed z-[9999] bg-[#252535] border border-[#3a3a4a] rounded-xl shadow-2xl py-1.5 min-w-[240px]"
+        style={{
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          maxHeight: 'var(--menu-max-height, 420px)',
+          overflowY: 'auto',
+        }}
+      >
+        <style>{`
+          .context-menu-scroll::-webkit-scrollbar { width: 6px; }
+          .context-menu-scroll::-webkit-scrollbar-track { background: transparent; }
+          .context-menu-scroll::-webkit-scrollbar-thumb { background: #3a3a4a; border-radius: 3px; }
+          .context-menu-scroll::-webkit-scrollbar-thumb:hover { background: #4a4a5a; }
+        `}</style>
+
+        <div className="context-menu-scroll">
+          {menuItems.map((item, idx) => {
+            if ('divider' in item && item.divider) {
+              return <div key={idx} className="my-1 border-t border-[#3a3a4a]" />;
+            }
+
+            const menuItem = item as {
+              icon: React.ReactNode;
+              label: string;
+              shortcut?: string;
+              hasSubmenu?: boolean;
+              danger?: boolean;
+              action: () => void;
+            };
+
+            return (
+              <button
+                key={idx}
+                onClick={menuItem.action}
+                className={`w-full px-3 py-2 text-sm text-left flex items-center justify-between transition-colors ${
+                  menuItem.danger
+                    ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300'
+                    : 'text-gray-200 hover:bg-[#3a3a4a]'
+                }`}
+              >
+                <span className="flex items-center space-x-3">
+                  {menuItem.icon}
+                  <span>{menuItem.label}</span>
+                </span>
+                <span className="flex items-center space-x-2">
+                  {menuItem.shortcut && (
+                    <kbd className="px-1.5 py-0.5 text-xs bg-[#1e1e2e] rounded border border-[#3a3a4a] text-gray-400">
+                      {menuItem.shortcut}
+                    </kbd>
+                  )}
+                  {menuItem.hasSubmenu && <ArrowRight size={14} className="text-gray-500" />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

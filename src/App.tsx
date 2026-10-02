@@ -17,6 +17,7 @@ import { ConnectionPage } from './components/ConnectionPage';
 import { useStore } from './store';
 import { ViewModeMenu } from './components/ViewModeMenu';
 import { TagFilter } from './components/TagFilter';
+import { Pencil, Copy, Trash2 } from 'lucide-react';
 
 function App() {
   const { 
@@ -44,14 +45,16 @@ function App() {
   }, [setNewTabOpen]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (newHostMenuRef.current && !newHostMenuRef.current.contains(event.target as Node)) {
-        setNewHostMenuOpen(false);
-      }
-    };
-    if (newHostMenuOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [newHostMenuOpen, setNewHostMenuOpen]);
+  const handleClickOutside = (e: MouseEvent) => {
+    const contextMenuEl = document.getElementById('group-context-menu');
+    if (contextMenuEl && !contextMenuEl.contains(e.target as Node)) {
+      useStore.getState().closeContextMenu();
+    }
+  };
+  
+  document.addEventListener('mousedown', handleClickOutside);
+  return () => document.removeEventListener('mousedown', handleClickOutside);
+}, []);
 
   return (
     <div className="flex h-screen bg-[#1e1e2e] text-gray-300 font-sans overflow-hidden">
@@ -215,7 +218,6 @@ function App() {
           </>
         )}
       </main>
-
       <RightPanel />
       <ContextMenu />
       <DeleteModal />

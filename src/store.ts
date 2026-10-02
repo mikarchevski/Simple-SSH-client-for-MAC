@@ -14,7 +14,6 @@ export interface Host {
   createdAt: number;
 }
 
-
 export interface Group {
   id: string;
   name: string;
@@ -134,9 +133,10 @@ interface AppState {
   isPanelOpen: boolean;
   panelMode: 'new' | 'details';
   searchQuery: string;
-  contextMenu: { x: number; y: number; hostId: string } | null;
+  contextMenu: { x: number; y: number; hostId?: string; groupId?: string } | null;
   panelMenuOpen: boolean;
   pendingDeleteHostId: string | null;
+  pendingDeleteGroupId: string | null;
   knownHostsSort: SortOrder;
   knownHostsView: ViewMode;
   viewMode: 'grid' | 'list';
@@ -157,14 +157,14 @@ interface AppState {
   snippetMenuOpen: boolean;
   showShellHistory: boolean;
   activeTabId: string;
-  hostMetrics: Record<string, HostMetrics | null>; // hostId -> metrics
-  pendingDeleteGroupId: string | null;
+  hostMetrics: Record<string, HostMetrics | null>;
+  metricsInterval: ReturnType<typeof setInterval> | null;
 
   // Actions (Hosts & General)
   setActivePage: (page: Page) => void;
   setActiveTopTab: (tab: TopTab) => void;
-  setViewMode: (mode: 'grid' | 'list') => void; // ✅ ИСПРАВЛЕНО: только тип
-  setSelectedTags: (tags: string[]) => void; // ✅ ИСПРАВЛЕНО: только тип
+  setViewMode: (mode: 'grid' | 'list') => void;
+  setSelectedTags: (tags: string[]) => void;
   setSelectedHost: (id: string | null) => void;
   setSelectedGroup: (id: string | null) => void;
   setNewTabOpen: (open: boolean) => void;
@@ -177,11 +177,14 @@ interface AppState {
   removeHost: (id: string) => void;
   setSearchQuery: (query: string) => void;
   openContextMenu: (x: number, y: number, hostId: string) => void;
+  openGroupContextMenu: (x: number, y: number, groupId: string) => void;
   closeContextMenu: () => void;
   togglePanelMenu: () => void;
   closePanelMenu: () => void;
   openDeleteModal: (id: string) => void;
   closeDeleteModal: () => void;
+  openDeleteGroupModal: (id: string) => void;
+  closeDeleteGroupModal: () => void;
   setKnownHostsSort: (sort: SortOrder) => void;
   setKnownHostsView: (view: ViewMode) => void;
   setShowInviteBanner: (show: boolean) => void;
@@ -191,8 +194,7 @@ interface AppState {
   setNewHostMenuOpen: (open: boolean) => void;
   addGroup: (group: Group) => void;
   cancelGroupEditing: () => void;
-  openDeleteGroupModal: (id: string) => void;
-  closeDeleteGroupModal: () => void;
+  duplicateGroup: (id: string) => void;
   
   // Actions (Keys)
   setSelectedKey: (id: string | null) => void;
@@ -221,7 +223,7 @@ interface AppState {
   setShowShellHistory: (show: boolean) => void;
   setSelectedGroupId: (id: string | null) => void;
   setEditingGroupId: (id: string | null) => void;
-  createGroup: () => string; // Создает группу и возвращает её ID
+  createGroup: () => string;
   updateGroup: (id: string, updates: Partial<Group>) => void;
   removeGroup: (id: string) => void;
 
@@ -231,8 +233,8 @@ interface AppState {
   closeTab: (tabId: string) => void;
   updateConnectionStatus: (tabId: string, status: 'connecting' | 'connected' | 'failed') => void;
   addConnectionLog: (tabId: string, log: string) => void;
-   setHostMetrics: (hostId: string, metrics: HostMetrics) => void; // ✅ ДОБАВЬТЕ
-  clearHostMetrics: (hostId: string) => void; // ✅ ДОБАВЬТЕ
+  setHostMetrics: (hostId: string, metrics: HostMetrics) => void;
+  clearHostMetrics: (hostId: string) => void;
 }
 
 const initialHosts: Host[] = [
@@ -279,7 +281,6 @@ export const useStore = create<AppState>((set, get) => {
     if (persisted) {
       set({ hosts: persisted.hosts, groups: persisted.groups });
     }
-    
   });
 
   return {
@@ -338,46 +339,26 @@ export const useStore = create<AppState>((set, get) => {
     setSelectedHost: (id) => set({ selectedHostId: id }),
     setSelectedGroup: (id) => set({ selectedGroupId: id }),
     setNewTabOpen: (open) => set({ newTabOpen: open }),
-   
-    
-    // ✅ ИСПРАВЛЕНО: правильная реализация внутри return
     setViewMode: (mode: 'grid' | 'list') => set({ viewMode: mode }),
     setSelectedTags: (tags: string[]) => set({ selectedTags: tags }),
     
     openNewHostPanel: () => set({ isPanelOpen: true, panelMode: 'new', selectedHostId: null, panelMenuOpen: false }),
     openHostDetails: (id) => set({ isPanelOpen: true, panelMode: 'details', selectedHostId: id, panelMenuOpen: false }),
+    
     closePanel: () => set((state) => {
-      // Если была открыта панель редактирования группы-черновика
       if (state.editingGroupId) {
         const editingGroup = state.groups.find(g => g.id === state.editingGroupId);
-        // Если группа существует, является черновиком и имя пустое - удаляем её
         if (editingGroup?.isDraft && !editingGroup.name.trim()) {
           const newGroups = state.groups.filter(g => g.id !== state.editingGroupId);
           debouncedSave(state.hosts, newGroups);
-          return { 
-            isPanelOpen: false, 
-            selectedHostId: null, 
-            panelMenuOpen: false,
-            editingGroupId: null,
-            groups: newGroups
-          };
+          return { isPanelOpen: false, selectedHostId: null, panelMenuOpen: false, editingGroupId: null, groups: newGroups };
         }
-        // Если имя введено - сохраняем группу (убираем флаг draft)
         if (editingGroup?.isDraft && editingGroup.name.trim()) {
-          const newGroups = state.groups.map(g => 
-            g.id === state.editingGroupId ? { ...g, isDraft: false } : g
-          );
+          const newGroups = state.groups.map(g => g.id === state.editingGroupId ? { ...g, isDraft: false } : g);
           debouncedSave(state.hosts, newGroups);
-          return { 
-            isPanelOpen: false, 
-            selectedHostId: null, 
-            panelMenuOpen: false,
-            editingGroupId: null,
-            groups: newGroups
-          };
+          return { isPanelOpen: false, selectedHostId: null, panelMenuOpen: false, editingGroupId: null, groups: newGroups };
         }
       }
-      
       return { isPanelOpen: false, selectedHostId: null, panelMenuOpen: false, editingGroupId: null };
     }),
     
@@ -400,6 +381,16 @@ export const useStore = create<AppState>((set, get) => {
       debouncedSave(newHosts, state.groups);
       return { hosts: newHosts };
     }),
+
+    duplicateGroup: (id) => set((state) => {
+      const group = state.groups.find(g => g.id === id);
+      if (!group) return state;
+      const newGroupId = `g${Date.now()}`;
+      const newGroup = { ...group, id: newGroupId, name: `${group.name} copy`, isDraft: false };
+      const newGroups = [...state.groups, newGroup];
+      debouncedSave(state.hosts, newGroups);
+      return { groups: newGroups };
+    }),
     
     removeHost: (id) => set((state) => {
       const newHosts = state.hosts.filter(h => h.id !== id);
@@ -419,6 +410,7 @@ export const useStore = create<AppState>((set, get) => {
     
     setSearchQuery: (query) => set({ searchQuery: query }),
     openContextMenu: (x, y, hostId) => set({ contextMenu: { x, y, hostId } }),
+    openGroupContextMenu: (x, y, groupId) => set({ contextMenu: { x, y, groupId } }),
     closeContextMenu: () => set({ contextMenu: null }),
     togglePanelMenu: () => set((state) => ({ panelMenuOpen: !state.panelMenuOpen })),
     closePanelMenu: () => set({ panelMenuOpen: false }),
@@ -480,7 +472,6 @@ export const useStore = create<AppState>((set, get) => {
     addConnectionTab: (hostId) => {
       const host = get().hosts.find(h => h.id === hostId);
       if (!host) return;
-      
       const newTab: Tab = {
         id: `tab-${Date.now()}`,
         type: 'connection',
@@ -489,31 +480,20 @@ export const useStore = create<AppState>((set, get) => {
         connectionStatus: 'connecting',
         connectionLog: [],
       };
-      
-      set((state) => ({
-        tabs: [...state.tabs, newTab],
-        activeTabId: newTab.id,
-      }));
+      set((state) => ({ tabs: [...state.tabs, newTab], activeTabId: newTab.id }));
     },
     
-
     setActiveTab: (tabId) => set({ activeTabId: tabId }),
 
     closeTab: (tabId) => set((state) => {
       const newTabs = state.tabs.filter(t => t.id !== tabId);
       let newActiveTabId = state.activeTabId;
       let newActiveTopTab = state.activeTopTab;
-
       if (state.activeTabId === tabId) {
         newActiveTabId = 'tab-vaults';
         newActiveTopTab = 'vaults';
       }
-
-      return { 
-        tabs: newTabs, 
-        activeTabId: newActiveTabId,
-        activeTopTab: newActiveTopTab
-      };
+      return { tabs: newTabs, activeTabId: newActiveTabId, activeTopTab: newActiveTopTab };
     }),
 
     updateConnectionStatus: (tabId, status) => set((state) => ({
@@ -523,6 +503,7 @@ export const useStore = create<AppState>((set, get) => {
     addConnectionLog: (tabId, log) => set((state) => ({
       tabs: state.tabs.map(t => t.id === tabId ? { ...t, connectionLog: [...(t.connectionLog || []), log] } : t)
     })),
+    
     setHostMetrics: (hostId, metrics) => set((state) => ({
       hostMetrics: { ...state.hostMetrics, [hostId]: metrics }
     })),
@@ -532,42 +513,30 @@ export const useStore = create<AppState>((set, get) => {
       delete newMetrics[hostId];
       return { hostMetrics: newMetrics };
     }),
-  setSelectedGroupId: (id) => set({ selectedGroupId: id }),
     
+    setSelectedGroupId: (id) => set({ selectedGroupId: id }),
     setEditingGroupId: (id) => set({ editingGroupId: id }),
     
     createGroup: () => {
       const newGroupId = `g${Date.now()}`;
-      const newGroup: Group = { 
-        id: newGroupId, 
-        name: '', // Пустое имя, пока пользователь не введёт
-        count: 0,
-        isDraft: true // <-- Помечаем как черновик
-      };
-      
+      const newGroup: Group = { id: newGroupId, name: '', count: 0, isDraft: true };
       set((state) => {
         const newGroups = [...state.groups, newGroup];
         debouncedSave(state.hosts, newGroups);
         return { groups: newGroups, editingGroupId: newGroupId };
       });
-      
       return newGroupId;
     },
     
     updateGroup: (id, updates) => set((state) => {
-      const newGroups = state.groups.map(g => 
-        g.id === id ? { ...g, ...updates } : g
-      );
+      const newGroups = state.groups.map(g => g.id === id ? { ...g, ...updates } : g);
       debouncedSave(state.hosts, newGroups);
       return { groups: newGroups };
     }),
     
     removeGroup: (id) => set((state) => {
       const newGroups = state.groups.filter(g => g.id !== id);
-      // Также убираем groupId у всех хостов в этой группе
-      const newHosts = state.hosts.map(h => 
-        h.groupId === id ? { ...h, groupId: undefined } : h
-      );
+      const newHosts = state.hosts.map(h => h.groupId === id ? { ...h, groupId: undefined } : h);
       debouncedSave(newHosts, newGroups);
       return { 
         groups: newGroups, 
@@ -575,30 +544,19 @@ export const useStore = create<AppState>((set, get) => {
         selectedGroupId: state.selectedGroupId === id ? null : state.selectedGroupId,
       };
     }),
+    
     cancelGroupEditing: () => set((state) => {
       if (state.editingGroupId) {
         const editingGroup = state.groups.find(g => g.id === state.editingGroupId);
-        // Если черновик и имя пустое - удаляем
         if (editingGroup?.isDraft && !editingGroup.name.trim()) {
           const newGroups = state.groups.filter(g => g.id !== state.editingGroupId);
           debouncedSave(state.hosts, newGroups);
-          return { 
-            editingGroupId: null,
-            isPanelOpen: false,
-            groups: newGroups
-          };
+          return { editingGroupId: null, isPanelOpen: false, groups: newGroups };
         }
-        // Если имя введено - сохраняем
         if (editingGroup?.isDraft && editingGroup.name.trim()) {
-          const newGroups = state.groups.map(g => 
-            g.id === state.editingGroupId ? { ...g, isDraft: false } : g
-          );
+          const newGroups = state.groups.map(g => g.id === state.editingGroupId ? { ...g, isDraft: false } : g);
           debouncedSave(state.hosts, newGroups);
-          return { 
-            editingGroupId: null,
-            isPanelOpen: false,
-            groups: newGroups
-          };
+          return { editingGroupId: null, isPanelOpen: false, groups: newGroups };
         }
       }
       return { editingGroupId: null, isPanelOpen: false };
