@@ -30,28 +30,7 @@ export function HostGrid() {
     <div className="flex-1 overflow-y-auto p-6 relative">
       
       {/* Баннер Invite members (если нужен, можно вернуть, сейчас закомментирован для чистоты) */}
-      {showInviteBanner && !selectedGroupId && (
-        <div className="mb-6 bg-[#252535] border border-[#3a3a4a] rounded-lg p-4 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Users size={20} className="text-gray-400" />
-            <div>
-              <span className="text-sm font-semibold text-gray-200">Invite members.</span>
-              <span className="text-sm text-gray-400 ml-1">Manage and use data together with your team.</span>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button className="bg-[#3a3a4a] hover:bg-[#4a4a5a] text-gray-200 px-3 py-1 rounded-md text-sm font-medium transition-colors">
-              Invite
-            </button>
-            <button 
-              onClick={() => setShowInviteBanner(false)}
-              className="text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
+      
 
       {/* Хлебные крошки */}
       {selectedGroup && (

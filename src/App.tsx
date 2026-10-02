@@ -80,7 +80,7 @@ function App() {
             icon={<Folder size={14} />}
             label="SFTP"
           />
-          <TopTabButton 
+          {/* <TopTabButton 
             active={activeTabId === 'tab-serial'} 
             onClick={() => { 
               setActiveTopTab('serial'); 
@@ -88,7 +88,7 @@ function App() {
             }}
             icon={<Usb size={14} />}
             label="Serial"
-          />
+          /> */}
           
           {/* Динамические вкладки подключений */}
           {tabs.filter(t => t.type === 'connection').map(tab => (
@@ -173,9 +173,9 @@ function App() {
                     )}
                   </div>
 
-                  <button className="bg-[#2a2a3a] hover:bg-[#333] text-gray-300 px-3 py-1.5 rounded-md text-sm font-medium flex items-center transition-colors border border-[#3a3a4a]">
+                  {/* <button className="bg-[#2a2a3a] hover:bg-[#333] text-gray-300 px-3 py-1.5 rounded-md text-sm font-medium flex items-center transition-colors border border-[#3a3a4a]">
                     <Monitor size={16} className="mr-1.5" />Serial
-                  </button>
+                  </button> */}
 
                   <div className="flex-1" />
 
@@ -184,13 +184,6 @@ function App() {
                     <ViewModeMenu />
                     
                     <TagFilter />
-
-                    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-semibold">
-                      M
-                    </div>
-                    <button className="bg-[#2a2a3a] hover:bg-[#333] text-gray-300 p-1.5 rounded-md transition-colors border border-[#3a3a4a]">
-                      <Plus size={14} />
-                    </button>
                   </div>
                 </header>
                 <HostGrid />
