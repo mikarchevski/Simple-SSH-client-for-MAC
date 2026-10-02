@@ -158,7 +158,7 @@ interface AppState {
   showShellHistory: boolean;
   activeTabId: string;
   hostMetrics: Record<string, HostMetrics | null>; // hostId -> metrics
-  pendingDeleteGroupId: null,
+  pendingDeleteGroupId: string | null;
 
   // Actions (Hosts & General)
   setActivePage: (page: Page) => void;
@@ -308,6 +308,7 @@ export const useStore = create<AppState>((set, get) => {
     contextMenu: null,
     panelMenuOpen: false,
     pendingDeleteHostId: null,
+    pendingDeleteGroupId: null,
     knownHostsSort: 'newest',
     knownHostsView: 'grid',
     viewMode: 'grid',
