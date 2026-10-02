@@ -359,11 +359,9 @@ function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) =
           <label className="text-xs text-gray-500 mb-1 block">Tags</label>
           <TagInput tags={form.tags} onChange={(newTags) => setForm({...form, tags: newTags})} />
         </div>
-        <FormButton icon={<HardDrive size={14} />} label="Backspace" rightLabel="Default" />
+        {/* <FormButton icon={<HardDrive size={14} />} label="Backspace" rightLabel="Default" /> */}
       </FormSection>
-      <button className="w-full bg-[#252535] border border-[#333] rounded-lg p-4 text-blue-400 hover:bg-[#2a2a3a] transition-colors flex items-center justify-center space-x-2">
-        <Users size={16} /><span className="text-sm">Share this host</span>
-      </button>
+      
       <FormSection title="SSH">
         <div className="flex items-center space-x-2 text-sm text-gray-300">
           <span>on</span>
@@ -543,7 +541,7 @@ function AdvancedOptions() {
   const [showMore, setShowMore] = useState(false);
   return (
     <>
-      <button onClick={() => setShowMore(!showMore)} className="w-full text-xs text-gray-500 hover:text-gray-300 flex items-center justify-center space-x-1 py-2">
+      {/* <button onClick={() => setShowMore(!showMore)} className="w-full text-xs text-gray-500 hover:text-gray-300 flex items-center justify-center space-x-1 py-2">
         <span>Show more</span><ChevronDown size={12} className={`transition-transform ${showMore ? 'rotate-180' : ''}`} />
       </button>
       {showMore && (
@@ -560,7 +558,7 @@ function AdvancedOptions() {
             <span className="text-sm text-blue-400">Aura</span>
           </div>
         </div>
-      )}
+      )} */}
       <button className="w-full bg-[#252535] border border-[#333] rounded-lg p-4 text-gray-400 hover:text-gray-200 hover:border-[#444] transition-colors flex items-center justify-center space-x-2">
         <Plus size={16} /><span className="text-sm">Add Telnet</span>
       </button>
