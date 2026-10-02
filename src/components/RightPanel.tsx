@@ -19,6 +19,7 @@ export function RightPanel() {
     username: '',
     password: '',
     tags: [] as string[],
+    groupId: undefined as string | undefined,
   });
 
   // Сброс формы при открытии режима создания нового хоста
@@ -31,6 +32,7 @@ export function RightPanel() {
         username: '',
         password: '',
         tags: [],
+        groupId: undefined,
       });
     }
   }, [panelMode]);
@@ -301,7 +303,10 @@ function HostDetailsForm({ host, onSave }: { host: any; onSave: (updates: any) =
 }
 
 // ✅ 5. NewHostForm теперь "глупый" компонент, который просто принимает form и setForm
+// ✅ 5. NewHostForm теперь использует реальные компоненты выбора
 function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
+  const groups = useStore((state) => state.groups); // Получаем список групп
+
   return (
     <>
       <FormSection title="Address">
@@ -318,6 +323,7 @@ function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
           />
         </div>
       </FormSection>
+      
       <FormSection title="General">
         <input
           type="text"
@@ -326,9 +332,27 @@ function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
           className="w-full bg-[#1e1e2e] text-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-[#3a3a4a] placeholder-gray-500 mb-3"
           placeholder="Label"
         />
-        <FormButton icon={<Folder size={14} />} label="Parent Group" />
-        <FormButton icon={<Tag size={14} />} label="Tags" />
+        
+        {/* ✅ ЗАМЕНЕНО: Реальный выбор группы вместо мертвой кнопки */}
+        <div className="mb-3">
+          <label className="text-xs text-gray-500 mb-1 block">Group</label>
+          <GroupSelector 
+            groupId={form.groupId} 
+            groups={groups} 
+            onChange={(newGroupId) => setForm({...form, groupId: newGroupId})} 
+          />
+        </div>
+
+        {/* ✅ ЗАМЕНЕНО: Реальный ввод тегов вместо мертвой кнопки */}
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">Tags</label>
+          <TagInput 
+            tags={form.tags} 
+            onChange={(newTags) => setForm({...form, tags: newTags})} 
+          />
+        </div>
       </FormSection>
+
       <FormSection title="SSH">
         <div className="flex items-center space-x-2 text-sm text-gray-300">
           <span>on</span>
@@ -341,9 +365,9 @@ function NewHostForm({ form, setForm }: { form: any; setForm: any }) {
           <span>port</span>
         </div>
       </FormSection>
+      
       <CredentialsSection form={form} setForm={setForm} />
       <AdvancedOptions />
-      {/* ✅ 6. Верхняя кнопка Connect отсюда удалена */}
     </>
   );
 }
